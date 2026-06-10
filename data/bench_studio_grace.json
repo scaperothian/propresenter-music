@@ -1,0 +1,328 @@
+[
+  {
+    "offset": 0.0,
+    "duration": null,
+    "dtw_med_s": 0.15000000000000213,
+    "dtw_p90_s": 0.40000000000000213,
+    "hmm_med_s": 3.597999999999999,
+    "hmm_p90_s": 12.508600000000001,
+    "track_pct": 1.0,
+    "lock_on_s": 6.0,
+    "reachable": 14,
+    "hits": 14,
+    "recall": 1.0,
+    "fire_mae_ms": 95.71428571428494,
+    "fire_max_ms": 259.00000000000034,
+    "spurious": 0,
+    "n_triggers": 14,
+    "max_proc_ms": 1538.5,
+    "missed": [],
+    "triggered": [
+      [
+        "01_verse1",
+        30.8
+      ],
+      [
+        "02_prechorus",
+        42.2
+      ],
+      [
+        "03_prechorus",
+        53.8
+      ],
+      [
+        "04_chorus",
+        63.8
+      ],
+      [
+        "05_chorus",
+        74.4
+      ],
+      [
+        "06_verse2",
+        85.8
+      ],
+      [
+        "07_verse2",
+        94.6
+      ],
+      [
+        "08_prechorus2",
+        105.8
+      ],
+      [
+        "09_prechorus2",
+        117.2
+      ],
+      [
+        "10_chorus",
+        128.4
+      ],
+      [
+        "11_chorus",
+        138.0
+      ],
+      [
+        "12_bridge",
+        169.0
+      ],
+      [
+        "13_chorus",
+        181.8
+      ],
+      [
+        "14_chorus",
+        194.0
+      ]
+    ]
+  },
+  {
+    "offset": 29.87,
+    "duration": null,
+    "dtw_med_s": 0.12000000000000455,
+    "dtw_p90_s": 0.4200000000000159,
+    "hmm_med_s": 3.4129999999999967,
+    "hmm_p90_s": 12.223800000000004,
+    "track_pct": 0.996969696969697,
+    "lock_on_s": 6.0000000000000036,
+    "reachable": 13,
+    "hits": 13,
+    "recall": 1.0,
+    "fire_mae_ms": 117.46153846153581,
+    "fire_max_ms": 302.99999999999727,
+    "spurious": 0,
+    "n_triggers": 13,
+    "max_proc_ms": 228.0,
+    "missed": [],
+    "triggered": [
+      [
+        "02_prechorus",
+        42.07
+      ],
+      [
+        "03_prechorus",
+        53.67
+      ],
+      [
+        "04_chorus",
+        63.87
+      ],
+      [
+        "05_chorus",
+        74.47
+      ],
+      [
+        "06_verse2",
+        85.87
+      ],
+      [
+        "07_verse2",
+        94.67
+      ],
+      [
+        "08_prechorus2",
+        105.67
+      ],
+      [
+        "09_prechorus2",
+        117.07
+      ],
+      [
+        "10_chorus",
+        128.27
+      ],
+      [
+        "11_chorus",
+        138.07
+      ],
+      [
+        "12_bridge",
+        169.07
+      ],
+      [
+        "13_chorus",
+        181.67
+      ],
+      [
+        "14_chorus",
+        194.27
+      ]
+    ]
+  },
+  {
+    "offset": 64.1,
+    "duration": null,
+    "dtw_med_s": 0.10000000000002274,
+    "dtw_p90_s": 0.39999999999997726,
+    "hmm_med_s": 3.6655000000000015,
+    "hmm_p90_s": 12.992900000000006,
+    "track_pct": 0.9987775061124694,
+    "lock_on_s": 6.0,
+    "reachable": 10,
+    "hits": 10,
+    "recall": 1.0,
+    "fire_mae_ms": 109.49999999999845,
+    "fire_max_ms": 251.99999999999534,
+    "spurious": 0,
+    "n_triggers": 10,
+    "max_proc_ms": 298.4,
+    "missed": [],
+    "triggered": [
+      [
+        "05_chorus",
+        74.5
+      ],
+      [
+        "06_verse2",
+        85.7
+      ],
+      [
+        "07_verse2",
+        94.7
+      ],
+      [
+        "08_prechorus2",
+        105.7
+      ],
+      [
+        "09_prechorus2",
+        117.3
+      ],
+      [
+        "10_chorus",
+        128.3
+      ],
+      [
+        "11_chorus",
+        138.1
+      ],
+      [
+        "12_bridge",
+        169.1
+      ],
+      [
+        "13_chorus",
+        181.7
+      ],
+      [
+        "14_chorus",
+        194.1
+      ]
+    ]
+  },
+  {
+    "offset": 95.0,
+    "duration": null,
+    "dtw_med_s": 0.14999999999997726,
+    "dtw_p90_s": 0.35000000000002274,
+    "hmm_med_s": 4.295000000000002,
+    "hmm_p90_s": 13.832400000000014,
+    "track_pct": 1.0,
+    "lock_on_s": 6.0,
+    "reachable": 7,
+    "hits": 7,
+    "recall": 1.0,
+    "fire_mae_ms": 47.71428571428414,
+    "fire_max_ms": 115.0000000000091,
+    "spurious": 0,
+    "n_triggers": 7,
+    "max_proc_ms": 443.8,
+    "missed": [],
+    "triggered": [
+      [
+        "08_prechorus2",
+        105.8
+      ],
+      [
+        "09_prechorus2",
+        117.2
+      ],
+      [
+        "10_chorus",
+        128.4
+      ],
+      [
+        "11_chorus",
+        138.0
+      ],
+      [
+        "12_bridge",
+        169.0
+      ],
+      [
+        "13_chorus",
+        181.8
+      ],
+      [
+        "14_chorus",
+        194.0
+      ]
+    ]
+  },
+  {
+    "offset": 130.33,
+    "duration": null,
+    "dtw_med_s": 0.18000000000003524,
+    "dtw_p90_s": 0.4800000000000182,
+    "hmm_med_s": 5.795000000000016,
+    "hmm_p90_s": 14.880600000000028,
+    "track_pct": 0.9876796714579056,
+    "lock_on_s": 6.0,
+    "reachable": 4,
+    "hits": 4,
+    "recall": 1.0,
+    "fire_mae_ms": 91.00000000000108,
+    "fire_max_ms": 206.00000000001728,
+    "spurious": 0,
+    "n_triggers": 4,
+    "max_proc_ms": 202.7,
+    "missed": [],
+    "triggered": [
+      [
+        "11_chorus",
+        137.93
+      ],
+      [
+        "12_bridge",
+        168.93
+      ],
+      [
+        "13_chorus",
+        181.93
+      ],
+      [
+        "14_chorus",
+        193.93
+      ]
+    ]
+  },
+  {
+    "offset": 170.0,
+    "duration": null,
+    "dtw_med_s": 0.19999999999998863,
+    "dtw_p90_s": 0.4000000000000057,
+    "hmm_med_s": 5.728999999999985,
+    "hmm_p90_s": 15.951400000000005,
+    "track_pct": 1.0,
+    "lock_on_s": 6.0,
+    "reachable": 2,
+    "hits": 2,
+    "recall": 1.0,
+    "fire_mae_ms": 54.500000000004434,
+    "fire_max_ms": 76.00000000002183,
+    "spurious": 0,
+    "n_triggers": 2,
+    "max_proc_ms": 163.2,
+    "missed": [],
+    "triggered": [
+      [
+        "13_chorus",
+        181.8
+      ],
+      [
+        "14_chorus",
+        194.0
+      ]
+    ]
+  }
+]

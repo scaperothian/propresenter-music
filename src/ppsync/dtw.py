@@ -161,12 +161,13 @@ def align(
         dtw_ref_lo_idx   int     reference slice used for DTW
         dtw_ref_hi_idx   int
     """
-    fps_ref = 1.0 / float(ref_timestamps[1] - ref_timestamps[0]) if len(ref_timestamps) > 1 else 50.0
-    stride_sec = 1.0 / fps_ref
+    stride_sec = float(ref_timestamps[1] - ref_timestamps[0]) if len(ref_timestamps) > 1 else 0.02
 
-    # Map time bounds to index bounds
-    lo_idx = int(search_lo_t / stride_sec)
-    hi_idx = int(search_hi_t / stride_sec)
+    # Map time bounds to index bounds.  ref_timestamps does not start at 0
+    # (the first window ends at lookback_sec), so search by value rather than
+    # dividing by the stride.
+    lo_idx = int(np.searchsorted(ref_timestamps, search_lo_t, side="left"))
+    hi_idx = int(np.searchsorted(ref_timestamps, search_hi_t, side="right"))
 
     # --- Step 1: coarse cosine search ---
     latest_live = live_buffer[-1]  # most recent embedding

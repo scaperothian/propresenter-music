@@ -4,12 +4,13 @@ One SongAligner instance processes audio chunks in order and maintains all
 layer state.  Call process_chunk() for each new audio chunk; it returns a
 telemetry dict for every frame.
 
-Live MERT frame cache
----------------------
-MERT is run on each new audio chunk (chunk_sec of audio ≈ CHUNK_SEC).  The
-resulting frame embeddings are appended to a ring buffer that keeps the last
-LOOKBACK_SEC seconds of frames.  Mean-pooling the ring buffer gives the
-single embedding that feeds the cosine search and DTW.
+Live MERT embedding
+-------------------
+Incoming audio chunks fill a ring buffer holding the last LOOKBACK_SEC of
+raw audio.  Each update re-embeds the whole window in one MERT call and
+mean-pools the frames, giving the single embedding that feeds the cosine
+search and DTW.  This matches the sliding-window reference preprocessing
+and is independent of chunk phase.
 
 DTW live buffer
 ---------------
@@ -43,6 +44,7 @@ from .config import (
     TARGET_SR,
     TRIGGER_BUFFER_MS,
     TRIGGER_CONFIDENCE_MIN,
+    TRIGGER_LATE_GRACE_SEC,
 )
 from .dtw import align as dtw_align
 from .embed import embed_chunk_live
@@ -101,6 +103,10 @@ class SongAligner:
         self.song_duration: float = float(cache["song_duration"])
         self.stride_sec: float = float(cache["stride_sec"])
         self.mert_layer: int = int(cache["mert_layer"])
+        # Effective MERT frame rate of the cache (short live chunks lose conv
+        # edge frames, so this is below the nominal MERT_FRAME_RATE).  Live
+        # pooling must span the same number of frames the reference used.
+        self.frame_rate: float = float(cache.get("frame_rate", MERT_FRAME_RATE))
 
         # HMM
         self.hmm = HMMPredictor(
@@ -119,10 +125,14 @@ class SongAligner:
             dry_run=dry_run,
         )
 
-        # MERT frame ring buffer (raw, un-transformed frames)
-        max_frames = int((LOOKBACK_SEC + chunk_sec) * MERT_FRAME_RATE) + 10
-        self._frame_cache: deque[torch.Tensor] = deque(maxlen=max_frames)
-        self._lookback_frames = int(LOOKBACK_SEC * MERT_FRAME_RATE)
+        # Audio ring buffer spanning the lookback window.  The whole window is
+        # re-embedded in one MERT call per chunk so the live embedding is a
+        # pure function of the last LOOKBACK_SEC of audio — independent of the
+        # chunk phase.  (Caching per-chunk MERT frames breaks when playback
+        # start is not aligned to the chunk grid: tracking drops 100% -> 4%
+        # on a 0.1s phase shift.)
+        self._audio_ring: np.ndarray = np.zeros(0, dtype=np.float32)
+        self._lookback_samples = int(LOOKBACK_SEC * TARGET_SR)
 
         # Pooled embedding ring buffer for DTW
         max_dtw_embs = int(dtw_live_sec / chunk_sec) + 2
@@ -142,7 +152,7 @@ class SongAligner:
 
     def reset(self) -> None:
         """Full reset for a new song or manual resync."""
-        self._frame_cache.clear()
+        self._audio_ring = np.zeros(0, dtype=np.float32)
         self._dtw_emb_buffer.clear()
         self._search_lo_t = 0.0
         self._search_hi_t = float(self.ref_timestamps[-1]) if len(self.ref_timestamps) else self.dtw_search_sec
@@ -167,18 +177,26 @@ class SongAligner:
             chunk_wall_t = time.monotonic()
 
         # ---- Layer 0: MERT embedding -----------------------------------------
-        chunk_t = torch.from_numpy(audio_chunk)
-        layer_frames = self._embed_chunk(chunk_t)  # [T_chunk, D]
-        for frame in layer_frames:
-            self._frame_cache.append(frame)
-
-        # Pool last LOOKBACK_SEC of cached frames
-        cached = list(self._frame_cache)[-self._lookback_frames:]
-        if len(cached) < 2:
+        # Reference embeddings were pooled over a FULL lookback window, so live
+        # embeddings are only comparable once the ring spans the whole lookback
+        # — partial windows must not enter the DTW buffer or they poison the
+        # first DTW_LIVE_SEC of matches after start.
+        audio = np.asarray(audio_chunk, dtype=np.float32)
+        self._audio_ring = np.concatenate([self._audio_ring, audio])[-self._lookback_samples:]
+        if len(self._audio_ring) < self._lookback_samples:
+            self._chunk_count += 1
             return {"status": "buffering", "chunk": self._chunk_count}
-        pooled_raw = torch.stack(cached).mean(dim=0)  # [D]
+
+        frames = self._embed_chunk(torch.from_numpy(self._audio_ring))  # [T, D]
+        pooled_raw = frames.mean(dim=0)  # [D]
         pooled_norm = apply_contrastive(pooled_raw, self.global_emb_t).numpy()  # [D]
         self._dtw_emb_buffer.append(pooled_norm)
+
+        # DTW on a near-empty buffer matches noise confidently (a 1-frame query
+        # fits anywhere); hold off all alignment layers until the buffer is full.
+        if len(self._dtw_emb_buffer) < self._dtw_emb_buffer.maxlen:
+            self._chunk_count += 1
+            return {"status": "buffering", "chunk": self._chunk_count}
 
         # ---- Layer 1: MERT coarse alignment (slide prototypes) ---------------
         sims = self.slide_protos @ pooled_norm  # [N_slides]
@@ -222,20 +240,47 @@ class SongAligner:
             coarse_slide_idx=coarse_slide_idx,
         )
         current_slide = hmm_out["current_slide"]
-        next_idx = hmm_out["next_slide_idx"]
-        next_slide_id = self.slide_ids[next_idx] if next_idx < len(self.slide_ids) else "end"
         trigger_conf = hmm_out["trigger_confidence"]
         predicted_next_t = hmm_out["predicted_next_t"]
 
         # ---- Trigger ---------------------------------------------------------
-        triggered = self.trigger.update(
-            current_song_t=hmm_out["expected_pos_t"],
-            next_slide_idx=next_idx,
-            next_slide_t=predicted_next_t,
-            slide_id=next_slide_id,
-            trigger_confidence=trigger_conf,
-            wall_time=chunk_wall_t,
-        )
+        # Drive the trigger from the DTW position when it is confident: the
+        # HMM's expected_pos_t is a probability-weighted average of slide
+        # MIDPOINTS, so it structurally lags the true position and crosses a
+        # boundary only after the boundary has already passed.  The HMM path
+        # remains the fallback for low-confidence stretches.
+        if dtw_confidence >= CONFIDENCE_THRESHOLD:
+            pos_t = refined_t
+            pos_conf = dtw_confidence
+        else:
+            pos_t = hmm_out["expected_pos_t"]
+            pos_conf = trigger_conf
+
+        # Aim at the first boundary not yet fired.  Boundaries left more than
+        # the grace window behind (mid-song join, long low-confidence gap) are
+        # skipped; ones crossed just now fire late rather than never — DTW
+        # jitter can step pos_t past a boundary between two chunks.  Only a
+        # confident position estimate may consume boundaries.
+        triggered = False
+        triggered_slide_id = None
+        boundary_idx = len(self.slide_ids)
+        if pos_conf >= self.trigger.confidence_min:
+            boundary_idx = self.trigger.last_triggered_idx + 1
+            while (boundary_idx < len(self.slide_ids)
+                   and pos_t > self.slide_t_refs[boundary_idx] + TRIGGER_LATE_GRACE_SEC):
+                self.trigger.mark_skipped(boundary_idx)
+                boundary_idx += 1
+        if boundary_idx < len(self.slide_ids):
+            triggered = self.trigger.update(
+                current_song_t=pos_t,
+                next_slide_idx=boundary_idx,
+                next_slide_t=float(self.slide_t_refs[boundary_idx]),
+                slide_id=self.slide_ids[boundary_idx],
+                trigger_confidence=pos_conf,
+                wall_time=chunk_wall_t,
+            )
+            if triggered:
+                triggered_slide_id = self.slide_ids[boundary_idx]
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
         self._chunk_count += 1
@@ -262,7 +307,7 @@ class SongAligner:
             "hmm_trigger_confidence": round(trigger_conf, 4),
             # Trigger
             "triggered": triggered,
-            "triggered_slide_id": next_slide_id if triggered else None,
+            "triggered_slide_id": triggered_slide_id,
             # Perf
             "processing_ms": round(elapsed_ms, 1),
         }

@@ -42,6 +42,15 @@ class TriggerScheduler:
         self._last_trigger_wall_t: float = 0.0
         self._cooldown_sec: float = 1.0  # minimum seconds between triggers
 
+    @property
+    def last_triggered_idx(self) -> int:
+        """Index of the most recently triggered (or skipped) slide."""
+        return self._last_triggered_idx
+
+    def mark_skipped(self, slide_idx: int) -> None:
+        """Mark *slide_idx* as passed without firing (stale boundary)."""
+        self._last_triggered_idx = max(self._last_triggered_idx, slide_idx)
+
     def update(
         self,
         current_song_t: float,

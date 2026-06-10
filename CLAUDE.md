@@ -28,6 +28,14 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 .venv/bin/ppsync-eval data/test_cache.npz \
     --file data/test_song.wav \
     --ground-truth data/test_manifest.json
+
+# Convert a ProPresenter annotation JSON to a ppsync manifest
+.venv/bin/python tools/pp_to_manifest.py <song>.json -o <song>_manifest.json
+
+# Start-offset re-sync benchmark (file-based, no mic; see tools/benchmark.py)
+.venv/bin/python tools/benchmark.py data/studio_cache_sliding.npz \
+    --file <song>.wav --manifest <song>_manifest.json \
+    --offsets 0,30,64.1,95 [--duration 30] [--trace-out /tmp/trace.json]
 ```
 
 ## Package layout
@@ -54,10 +62,8 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 JSON manifest → load_manifest → slides (slide_id, t_ref, t_stop)
 Audio file   → load_audio    → [N] float32 @ 24kHz
 
-embed_audio(wav) → [L+1, T, D] hidden states
-hidden[layer]    → [T, D] frame embeddings
-
-strided_window_embeddings(frames, lookback=2s, stride=20ms)
+sliding_window_embeddings(wav, lookback=2s, stride=50ms)
+  one MERT forward per [t-2s, t] window (batched), mean-pooled
   → raw_win_embs [N_ref, D]  +  ref_timestamps [N_ref]
 
 fit_global(raw_win_embs)         → global_emb [D]
@@ -69,8 +75,8 @@ build_hmm_transition(t_refs, t_stops, stride_sec) → A [N,N], pi [N]
 ── saved to .npz ──
 
 Live (per 200ms chunk):
-  embed_chunk_live → frames [T_chunk, D]
-  ring buffer of frames → mean pool → pooled_raw [D]
+  audio ring buffer (last 2s) → embed_chunk_live(whole window) → mean pool
+  → pooled_raw [D]   (buffering until ring + DTW buffer are full, ~6s)
   apply_contrastive(pooled_raw, global_emb) → pooled_norm [D]
 
   cosine(pooled_norm, slide_protos) → coarse_slide_idx, coarse_conf
@@ -82,17 +88,42 @@ Live (per 200ms chunk):
   HMMPredictor.update(refined_t, dtw_confidence, coarse_slide_idx)
     → current_slide, state_probs, predicted_next_t, trigger_confidence
 
-  TriggerScheduler.update(...)
-    → HTTP POST if confidence high and near boundary
+  pos_t = refined_t if DTW confident else HMM expected_pos_t
+  first unfired boundary vs pos_t (± grace) → TriggerScheduler.update(...)
+    → HTTP POST when pos_t crosses t_ref - buffer
 ```
 
 ## Non-obvious design decisions
+
+**Live and reference embeddings must come from the same computation.**  MERT
+frames depend on their attention context: frames from 30s chunks, 2s windows,
+and 0.2s chunks live in *different distributions* and cosine matching across
+them fails completely (best match lands at the song's quiet outro).  Both
+sides therefore embed full 2s windows in single MERT calls.  Caching per-chunk
+live frames is also out: it makes the embedding depend on chunk phase, and a
+0.1s phase shift between live playback and the reference grid drops tracking
+from 100% to 4% (see `tools/benchmark.py` history in data/bench_studio*.json).
+
+**Buffer warm-up gating.**  No DTW, search-window anchoring, or HMM
+observation until the audio ring spans the full lookback AND the DTW buffer is
+full (~6s).  A 1-frame DTW query matches anywhere with above-threshold
+"confidence", and the forward-only anchor then locks the search at a bogus
+position permanently.
+
+**Trigger fires on DTW position, not HMM expectation.**  The HMM's
+`expected_pos_t` is a probability-weighted average of slide *midpoints* — it
+crosses a boundary only after the boundary has passed, so boundary triggers
+driven by it fire seconds late or never.  When DTW is confident the trigger
+compares `refined_t` against the first unfired boundary; the HMM is the
+fallback during low-confidence stretches.  Boundaries crossed less than
+`TRIGGER_LATE_GRACE_SEC` ago still fire (late slide > no slide); older ones
+are skipped (mid-song join).
 
 **No Sakoe-Chiba band in `subsequence_dtw`.**  A band of `|i - j| <= k` is wrong for subsequence DTW because the optimal path is offset by the match position, not near (0,0).  The reference window passed by `align()` is already narrow (±`dtw_context_sec` around the candidate), which limits the search space without breaking correctness.
 
 **Contrastive normalization, not ZCA.**  `apply_contrastive` subtracts the song-level mean then L2-normalizes.  This removes the dominant "sounds like music" direction that makes all sections score ~0.9 cosine similarity.  ZCA from `mert-experiment` is more powerful but expensive; add it if per-slide similarity remains too high.
 
-**HMM transition from stride_sec, not chunk_sec.**  The HMM step interval is `stride_sec` (20ms), matching the reference embedding density.  This means the HMM advances once per reference frame, not once per audio chunk.  The `SongAligner` calls `hmm.update()` once per audio chunk (200ms), so the HMM effectively sees observations at 5Hz, not 50Hz — this is fine since the reference timestamps step at 20ms but the live update rate is 200ms.
+**HMM transition step mismatch (known, tolerated).**  The transition matrix is built for `stride_sec` steps but `hmm.update()` runs once per 200ms chunk, so the transition prior advances slower than real time.  With confident DTW observations the emission dominates and this barely matters; it is why the HMM alone cannot drive timely triggers (see trigger note above).  Fix by rebuilding A for the chunk interval if the HMM ever needs to free-run through long low-confidence gaps.
 
 **Search window anchoring.**  Once `dtw_confidence >= CONFIDENCE_THRESHOLD`, the lower bound of the cosine search window advances to `refined_t - 2s`.  This prevents backward regression but allows the search to slip back 2s to absorb timing variation.
 

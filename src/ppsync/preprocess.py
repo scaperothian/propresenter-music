@@ -24,11 +24,64 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .config import LOOKBACK_SEC, MERT_FRAME_RATE, MERT_LAYER, STRIDE_SEC, TARGET_SR
+from .config import CHUNK_SEC, LOOKBACK_SEC, MERT_LAYER, STRIDE_SEC, TARGET_SR
 from .embed import embed_audio, load_model
 from .io import finalize_slide_stops, load_audio, load_manifest
 from .transform import apply_contrastive, fit_global
 from .windows import pool_slide_embeddings, strided_window_embeddings
+
+
+# ---------------------------------------------------------------------------
+# Sliding-window reference embeddings
+# ---------------------------------------------------------------------------
+
+def sliding_window_embeddings(
+    wav: torch.Tensor,
+    model,
+    processor,
+    device: str,
+    lookback_sec: float = LOOKBACK_SEC,
+    stride_sec: float = STRIDE_SEC,
+    mert_layer: int = MERT_LAYER,
+    batch_size: int = 16,
+    show_progress: bool = True,
+) -> tuple[torch.Tensor, np.ndarray]:
+    """
+    Embed each [t - lookback_sec, t] window in its own MERT forward pass
+    (batched) and mean-pool the frames.
+
+    Unlike chunked embedding, the result is a pure function of the window's
+    audio — independent of any chunk grid — so live queries whose start time
+    is not phase-aligned with the reference still match (the chunked pipeline
+    drops from 100% to 4% tracking on a 0.1s phase shift).
+
+    Returns:
+        win_embs:   [N, D] raw mean-pooled window embeddings
+        timestamps: [N] right-edge time of each window (seconds)
+    """
+    from tqdm import tqdm
+
+    sr = TARGET_SR
+    win = int(lookback_sec * sr)
+    duration = wav.shape[0] / sr
+    edges = np.arange(lookback_sec, duration + 1e-9, stride_sec)
+
+    embs: list[torch.Tensor] = []
+    batches = range(0, len(edges), batch_size)
+    if show_progress:
+        batches = tqdm(batches, unit="batch", desc="Sliding windows")
+    with torch.no_grad():
+        for b0 in batches:
+            windows = []
+            for t in edges[b0:b0 + batch_size]:
+                s1 = min(int(t * sr), wav.shape[0])
+                windows.append(wav[s1 - win:s1].numpy())
+            inputs = processor(windows, sampling_rate=sr, return_tensors="pt").to(device)
+            out = model(**inputs, output_hidden_states=True)
+            h = out.hidden_states[mert_layer]  # [B, T, D]
+            embs.append(h.mean(dim=1).cpu())
+
+    return torch.cat(embs, dim=0), edges
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +144,8 @@ def preprocess_song(
     mert_layer: int = MERT_LAYER,
     device: str | None = None,
     show_progress: bool = True,
+    embed_chunk_sec: float = CHUNK_SEC,
+    embed_mode: str = "sliding",
 ) -> dict:
     """
     Run offline preprocessing for one song and save the embedding cache.
@@ -132,17 +187,42 @@ def preprocess_song(
             f"({s['t_stop'] - s['t_ref']:.2f}s)"
         )
 
-    print(f"\nRunning MERT on {device}  (layer {mert_layer})…")
+    # Reference embeddings MUST come from the same computation the live path
+    # uses: MERT frames depend on their attention context, so embeddings from
+    # 30s chunks live in a different distribution than live ones and cosine
+    # matching across the two fails entirely.
     processor, model = load_model(device)
-    hidden = embed_audio(wav, model, processor, device, show_progress=show_progress)
-    # hidden: [L+1, T, D]
-    frames = hidden[mert_layer]  # [T, D]
-    print(f"  Frames: {frames.shape[0]:,}  Dim: {frames.shape[1]}")
+    frame_rate = float(0)
+    if embed_mode == "sliding":
+        # One forward pass per [t - lookback, t] window — phase-independent,
+        # matching the live path which re-embeds its full lookback each chunk.
+        print(f"\nRunning MERT on {device}  (layer {mert_layer}, sliding "
+              f"{lookback_sec}s windows, stride {stride_sec}s)…")
+        raw_win_embs, ref_timestamps = sliding_window_embeddings(
+            wav, model, processor, device,
+            lookback_sec=lookback_sec, stride_sec=stride_sec,
+            mert_layer=mert_layer, show_progress=show_progress,
+        )
+        print(f"  Reference windows: {raw_win_embs.shape[0]:,}")
+    else:
+        print(f"\nRunning MERT on {device}  (layer {mert_layer}, chunk={embed_chunk_sec}s)…")
+        hidden = embed_audio(
+            wav, model, processor, device,
+            chunk_sec=embed_chunk_sec, show_progress=show_progress,
+        )
+        # hidden: [L+1, T, D]
+        frames = hidden[mert_layer]  # [T, D]
+        # Short chunks lose conv edge frames (0.2s -> 14 frames = 70fps, not
+        # 75); derive the effective rate so timestamps stay true to song time.
+        frame_rate = frames.shape[0] / song_duration
+        print(f"  Frames: {frames.shape[0]:,}  Dim: {frames.shape[1]}  "
+              f"({frame_rate:.2f} fps effective)")
 
-    print(f"\nBuilding dense reference embeddings (lookback={lookback_sec}s, stride={stride_sec}s)…")
-    raw_win_embs, ref_timestamps = strided_window_embeddings(
-        frames, lookback_sec=lookback_sec, stride_sec=stride_sec, fps=MERT_FRAME_RATE
-    )
+        print(f"\nBuilding dense reference embeddings "
+              f"(lookback={lookback_sec}s, stride={stride_sec}s)…")
+        raw_win_embs, ref_timestamps = strided_window_embeddings(
+            frames, lookback_sec=lookback_sec, stride_sec=stride_sec, fps=frame_rate
+        )
     print(f"  Reference windows: {raw_win_embs.shape[0]:,}")
 
     global_emb = fit_global(raw_win_embs)  # [D]
@@ -180,6 +260,9 @@ def preprocess_song(
         "lookback_sec": np.float32(lookback_sec),
         "stride_sec": np.float32(stride_sec),
         "mert_layer": np.int32(mert_layer),
+        "frame_rate": np.float32(frame_rate),
+        "embed_chunk_sec": np.float32(embed_chunk_sec),
+        "embed_mode": np.array(embed_mode),
     }
     np.savez(str(output_path), **payload)
     print(f"\nCache saved to: {output_path}")

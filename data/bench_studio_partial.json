@@ -1,0 +1,120 @@
+[
+  {
+    "offset": 12.0,
+    "duration": 30.0,
+    "dtw_med_s": 0.1999999999999993,
+    "dtw_p90_s": 0.3999999999999986,
+    "hmm_med_s": 5.3409999999999975,
+    "hmm_p90_s": 14.261500000000003,
+    "track_pct": 1.0,
+    "lock_on_s": 6.0,
+    "reachable": 2,
+    "hits": 1,
+    "recall": 0.5,
+    "fire_mae_ms": 131.00000000000023,
+    "fire_max_ms": 131.00000000000023,
+    "spurious": 0,
+    "n_triggers": 1,
+    "max_proc_ms": 119.6,
+    "missed": [
+      "02_prechorus"
+    ],
+    "triggered": [
+      [
+        "01_verse1",
+        30.8
+      ]
+    ]
+  },
+  {
+    "offset": 41.3,
+    "duration": 30.0,
+    "dtw_med_s": 0.09999999999999432,
+    "dtw_p90_s": 0.25,
+    "hmm_med_s": 2.1514999999999986,
+    "hmm_p90_s": 5.040299999999999,
+    "track_pct": 1.0,
+    "lock_on_s": 6.0,
+    "reachable": 2,
+    "hits": 2,
+    "recall": 1.0,
+    "fire_mae_ms": 94.50000000000003,
+    "fire_max_ms": 137.99999999999812,
+    "spurious": 0,
+    "n_triggers": 2,
+    "max_proc_ms": 873.1,
+    "missed": [],
+    "triggered": [
+      [
+        "03_prechorus",
+        53.5
+      ],
+      [
+        "04_chorus",
+        63.9
+      ]
+    ]
+  },
+  {
+    "offset": 100.33,
+    "duration": 30.0,
+    "dtw_med_s": 0.0800000000000125,
+    "dtw_p90_s": 0.3299999999999983,
+    "hmm_med_s": 2.698999999999998,
+    "hmm_p90_s": 5.2309999999999865,
+    "track_pct": 1.0,
+    "lock_on_s": 6.0,
+    "reachable": 2,
+    "hits": 2,
+    "recall": 1.0,
+    "fire_mae_ms": 282.0000000000012,
+    "fire_max_ms": 560.9999999999928,
+    "spurious": 0,
+    "n_triggers": 3,
+    "max_proc_ms": 134.8,
+    "missed": [],
+    "triggered": [
+      [
+        "08_prechorus2",
+        106.33
+      ],
+      [
+        "09_prechorus2",
+        117.13
+      ],
+      [
+        "10_chorus",
+        128.53
+      ]
+    ]
+  },
+  {
+    "offset": 158.0,
+    "duration": 30.0,
+    "dtw_med_s": 0.09999999999999432,
+    "dtw_p90_s": 0.25,
+    "hmm_med_s": 3.6270000000000095,
+    "hmm_p90_s": 14.302600000000018,
+    "track_pct": 1.0,
+    "lock_on_s": 6.0,
+    "reachable": 2,
+    "hits": 2,
+    "recall": 1.0,
+    "fire_mae_ms": 55.00000000000682,
+    "fire_max_ms": 76.00000000002183,
+    "spurious": 0,
+    "n_triggers": 2,
+    "max_proc_ms": 157.8,
+    "missed": [],
+    "triggered": [
+      [
+        "12_bridge",
+        169.0
+      ],
+      [
+        "13_chorus",
+        181.8
+      ]
+    ]
+  }
+]

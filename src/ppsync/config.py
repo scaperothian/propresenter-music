@@ -38,6 +38,7 @@ HMM_MIN_SIGMA_SEC = 0.5      # floor for emission sigma (handles short slides)
 # ---------------------------------------------------------------------------
 TRIGGER_BUFFER_MS = 200     # fire REST call this many ms before slide boundary
 TRIGGER_CONFIDENCE_MIN = 0.6  # minimum HMM trigger confidence
+TRIGGER_LATE_GRACE_SEC = 1.0  # still fire a boundary crossed up to this long ago
 
 # ---------------------------------------------------------------------------
 # REST output
