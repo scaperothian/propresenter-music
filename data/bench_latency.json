@@ -1,0 +1,83 @@
+[
+  {
+    "offset": 0.0,
+    "duration": null,
+    "dtw_med_s": 0.15000000000000213,
+    "dtw_p90_s": 0.40000000000000213,
+    "hmm_med_s": 3.584000000000003,
+    "hmm_p90_s": 12.485000000000001,
+    "track_pct": 1.0,
+    "lock_on_s": 6.0,
+    "reachable": 14,
+    "hits": 14,
+    "recall": 1.0,
+    "fire_mae_ms": 95.71428571428494,
+    "fire_max_ms": 259.00000000000034,
+    "spurious": 0,
+    "n_triggers": 14,
+    "proc_mean_ms": 144.57537379067722,
+    "proc_p50_ms": 145.2,
+    "proc_p95_ms": 165.8,
+    "max_proc_ms": 449.6,
+    "rt_ok_pct": 0.990325417766051,
+    "missed": [],
+    "triggered": [
+      [
+        "01_verse1",
+        30.8
+      ],
+      [
+        "02_prechorus",
+        42.2
+      ],
+      [
+        "03_prechorus",
+        53.8
+      ],
+      [
+        "04_chorus",
+        63.8
+      ],
+      [
+        "05_chorus",
+        74.4
+      ],
+      [
+        "06_verse2",
+        85.8
+      ],
+      [
+        "07_verse2",
+        94.6
+      ],
+      [
+        "08_prechorus2",
+        105.8
+      ],
+      [
+        "09_prechorus2",
+        117.2
+      ],
+      [
+        "10_chorus",
+        128.4
+      ],
+      [
+        "11_chorus",
+        138.0
+      ],
+      [
+        "12_bridge",
+        169.0
+      ],
+      [
+        "13_chorus",
+        181.8
+      ],
+      [
+        "14_chorus",
+        194.0
+      ]
+    ]
+  }
+]

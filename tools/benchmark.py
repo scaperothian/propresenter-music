@@ -88,7 +88,7 @@ def run_offset(
     dtw_errs: list[float] = []  # |dtw_refined_t - true song time|, post-warmup
     hmm_errs: list[float] = []
     lock_on_t: float | None = None
-    max_proc_ms = 0.0
+    proc_ms: list[float] = []   # per-chunk processing latency
 
     end_t = None if duration is None else offset + duration
     horizon = offset + warmup_sec
@@ -102,7 +102,7 @@ def run_offset(
         frame = aligner.process_chunk(chunk, chunk_wall_t=song_t)
         if frame.get("status"):  # buffering / silence
             continue
-        max_proc_ms = max(max_proc_ms, frame.get("processing_ms", 0.0))
+        proc_ms.append(frame.get("processing_ms", 0.0))
 
         dtw_err = frame["dtw_refined_t"] - song_t
         hmm_err = frame["hmm_expected_pos_t"] - song_t
@@ -163,7 +163,13 @@ def run_offset(
         "fire_max_ms": float(np.max(fire_errors_ms)) if fire_errors_ms else float("nan"),
         "spurious": spurious,
         "n_triggers": len(triggers),
-        "max_proc_ms": max_proc_ms,
+        "proc_mean_ms": float(np.mean(proc_ms)) if proc_ms else float("nan"),
+        "proc_p50_ms": float(np.percentile(proc_ms, 50)) if proc_ms else float("nan"),
+        "proc_p95_ms": float(np.percentile(proc_ms, 95)) if proc_ms else float("nan"),
+        "max_proc_ms": float(np.max(proc_ms)) if proc_ms else float("nan"),
+        # fraction of chunks processed faster than real time (chunk duration)
+        "rt_ok_pct": float(np.mean(np.array(proc_ms) <= CHUNK_SEC * 1000.0))
+                     if proc_ms else float("nan"),
         "missed": sorted(reachable_ids - matched_ids),
         "triggered": [(t["slide_id"], round(t["fire_t"], 2)) for t in triggers],
     }
@@ -243,8 +249,13 @@ def main(argv: list[str] | None = None) -> None:
     recalls = [r["recall"] for r in results if not np.isnan(r["recall"])]
     print("-" * len(header))
     print(f"mean recall {np.mean(recalls):.2f}   "
-          f"mean dtw_med {np.mean([r['dtw_med_s'] for r in results]):.2f}s   "
-          f"worst proc {max(r['max_proc_ms'] for r in results):.1f}ms/chunk")
+          f"mean dtw_med {np.mean([r['dtw_med_s'] for r in results]):.2f}s")
+    print(f"latency/chunk (budget {CHUNK_SEC * 1000:.0f}ms): "
+          f"mean {np.mean([r['proc_mean_ms'] for r in results]):.1f}  "
+          f"p50 {np.mean([r['proc_p50_ms'] for r in results]):.1f}  "
+          f"p95 {np.mean([r['proc_p95_ms'] for r in results]):.1f}  "
+          f"max {max(r['max_proc_ms'] for r in results):.1f}  "
+          f"rt-ok {100 * np.mean([r['rt_ok_pct'] for r in results]):.1f}%")
 
     if args.json_out:
         Path(args.json_out).write_text(json.dumps(results, indent=2))
