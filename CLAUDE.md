@@ -32,6 +32,10 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 # Convert a ProPresenter annotation JSON to a ppsync manifest
 .venv/bin/python tools/pp_to_manifest.py <song>.json -o <song>_manifest.json
 
+# Live mic -> ProPresenter (REST API, default port 1025)
+.venv/bin/ppsync-align data/studio_cache_sliding.npz --mic \
+    --pp-host localhost [--pp-port 1025] [--log /tmp/ppsync.jsonl]
+
 # Start-offset re-sync benchmark (file-based, no mic; see tools/benchmark.py)
 .venv/bin/python tools/benchmark.py data/studio_cache_sliding.npz \
     --file <song>.wav --manifest <song>_manifest.json \
@@ -127,6 +131,15 @@ so latency stays bounded instead of growing forever.  The aligner skips all
 layers while the lookback RMS is under `SILENCE_RMS_DBFS`: ambient noise
 DTW-matches the song's quietest section with above-threshold confidence, so
 an open mic before the song starts could otherwise walk into a boundary.
+
+**Manifest slide instances vs ProPresenter slide indices.**  ppsync slides are
+chronological *trigger events* (a chorus shown 3× = 3 instances), but the
+ProPresenter REST API addresses slides by their position in the presentation.
+`pp_to_manifest.py` records `pp_slide_index` per instance (repeats share one)
+and the presentation `pp_uuid`; both ride through the cache, and the trigger
+fires `GET /v1/presentation/{uuid}/{pp_slide_index}/trigger` (`active` when no
+uuid).  Trigger HTTP runs on a daemon thread — a slow ProPresenter must not
+stall the 200ms audio loop.  Enable with `--pp-host` (else legacy POST).
 
 **No Sakoe-Chiba band in `subsequence_dtw`.**  A band of `|i - j| <= k` is wrong for subsequence DTW because the optimal path is offset by the match position, not near (0,0).  The reference window passed by `align()` is already narrow (±`dtw_context_sec` around the candidate), which limits the search space without breaking correctness.
 

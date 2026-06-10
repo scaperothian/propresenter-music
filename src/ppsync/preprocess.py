@@ -234,6 +234,11 @@ def preprocess_song(
     slide_t_refs = np.array([s["t_ref"] for s in slides], dtype=np.float64)
     slide_t_stops = np.array([s["t_stop"] for s in slides], dtype=np.float64)
     slide_ids = np.array([s["slide_id"] for s in slides], dtype=object)
+    slide_pp_indices = np.array(
+        [s.get("pp_slide_index", i) for i, s in enumerate(slides)], dtype=np.int32
+    )
+    import json as _json
+    pp_uuid = _json.loads(Path(manifest_path).read_text()).get("pp_uuid", "")
 
     for s in slides:
         raw_proto = pool_slide_embeddings(
@@ -263,6 +268,8 @@ def preprocess_song(
         "frame_rate": np.float32(frame_rate),
         "embed_chunk_sec": np.float32(embed_chunk_sec),
         "embed_mode": np.array(embed_mode),
+        "slide_pp_indices": slide_pp_indices,
+        "pp_uuid": np.array(pp_uuid),
     }
     np.savez(str(output_path), **payload)
     print(f"\nCache saved to: {output_path}")

@@ -77,6 +77,7 @@ class SongAligner:
         processor=None,
         device: str = "cpu",
         rest_url: str = "http://localhost:5000/slide",
+        pp_url: str | None = None,
         trigger_buffer_ms: float = TRIGGER_BUFFER_MS,
         trigger_conf_min: float = TRIGGER_CONFIDENCE_MIN,
         dry_run: bool = False,
@@ -99,6 +100,13 @@ class SongAligner:
         self.slide_ids: list[str] = cache["slide_ids"]
         self.slide_t_refs: np.ndarray = cache["slide_t_refs"]
         self.slide_t_stops: np.ndarray = cache["slide_t_stops"]
+        # ProPresenter slide position per manifest instance (repeats share
+        # one); older caches lack it — fall back to chronological order.
+        if "slide_pp_indices" in cache:
+            self.slide_pp_indices: np.ndarray = cache["slide_pp_indices"]
+        else:
+            self.slide_pp_indices = np.arange(len(self.slide_ids), dtype=np.int32)
+        pp_uuid = str(cache["pp_uuid"]) if "pp_uuid" in cache else ""
         self.global_emb: np.ndarray = cache["global_emb"]      # [D]
         self.global_emb_t = torch.from_numpy(self.global_emb)
         self.song_duration: float = float(cache["song_duration"])
@@ -124,6 +132,8 @@ class SongAligner:
             buffer_ms=trigger_buffer_ms,
             confidence_min=trigger_conf_min,
             dry_run=dry_run,
+            pp_base_url=pp_url,
+            pp_uuid=pp_uuid,
         )
 
         # Audio ring buffer spanning the lookback window.  The whole window is
@@ -288,6 +298,7 @@ class SongAligner:
                 slide_id=self.slide_ids[boundary_idx],
                 trigger_confidence=pos_conf,
                 wall_time=chunk_wall_t,
+                pp_slide_index=int(self.slide_pp_indices[boundary_idx]),
             )
             if triggered:
                 triggered_slide_id = self.slide_ids[boundary_idx]

@@ -126,7 +126,16 @@ def _align_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--rest-url", default=REST_URL,
-        help=f"REST endpoint for slide triggers (default: {REST_URL}).",
+        help=f"Legacy POST endpoint for slide triggers (default: {REST_URL}).",
+    )
+    p.add_argument(
+        "--pp-host", default=None, metavar="HOST",
+        help="ProPresenter host — enables real ProPresenter REST triggering "
+             "(GET /v1/presentation/{uuid|active}/{slide}/trigger).",
+    )
+    p.add_argument(
+        "--pp-port", type=int, default=1025, metavar="PORT",
+        help="ProPresenter API port (default: 1025).",
     )
     p.add_argument(
         "--trigger-buffer", type=float, default=TRIGGER_BUFFER_MS, metavar="MS",
@@ -200,12 +209,17 @@ def align_main(argv: list[str] | None = None) -> None:
     processor, model = load_model(device)
 
     cache_path = Path(args.cache)
+    pp_url = f"http://{args.pp_host}:{args.pp_port}" if args.pp_host else None
+    if pp_url:
+        print(f"ProPresenter triggering → {pp_url}")
+
     aligner = SongAligner(
         cache_path=cache_path,
         model=model,
         processor=processor,
         device=device,
         rest_url=args.rest_url,
+        pp_url=pp_url,
         trigger_buffer_ms=args.trigger_buffer,
         trigger_conf_min=args.trigger_conf,
         dry_run=args.dry_run,

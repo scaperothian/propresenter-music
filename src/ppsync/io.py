@@ -64,6 +64,10 @@ def load_manifest(json_path: Path) -> tuple[Path, list[dict]]:
                 "t_ref": t_ref,
                 "t_stop": t_stop,
                 "lyrics": s.get("lyrics", ""),
+                # Slide's 0-based position in the ProPresenter presentation
+                # (repeated sections share one); defaults to chronological
+                # order for manifests without ProPresenter metadata.
+                "pp_slide_index": int(s.get("pp_slide_index", i)),
             }
         )
 

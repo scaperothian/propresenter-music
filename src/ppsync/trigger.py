@@ -3,10 +3,21 @@
 Applies a configurable look-ahead buffer so the slide advances slightly before
 the musical boundary, accounting for display latency.  Gates on an HMM
 trigger-confidence threshold to prevent false positives.
+
+Two output modes:
+  - ProPresenter (``pp_base_url`` set): GET
+    ``/v1/presentation/{uuid}/{pp_slide_index}/trigger`` (or
+    ``.../presentation/active/...`` when no uuid is known) — the official
+    ProPresenter 7 REST API, same endpoints as the propresenter-client lib.
+  - Legacy (default): POST a JSON payload to ``rest_url``.
+
+HTTP requests run on a daemon thread: a slow presentation host must never
+stall the 200ms real-time audio loop.
 """
 
 from __future__ import annotations
 
+import threading
 import time
 
 import requests
@@ -31,12 +42,16 @@ class TriggerScheduler:
         confidence_min: float = TRIGGER_CONFIDENCE_MIN,
         rest_timeout_sec: float = REST_TIMEOUT_SEC,
         dry_run: bool = False,
+        pp_base_url: str | None = None,
+        pp_uuid: str | None = None,
     ) -> None:
         self.rest_url = rest_url
         self.buffer_sec = buffer_ms / 1000.0
         self.confidence_min = confidence_min
         self.rest_timeout_sec = rest_timeout_sec
         self.dry_run = dry_run
+        self.pp_base_url = pp_base_url.rstrip("/") if pp_base_url else None
+        self.pp_uuid = pp_uuid or None
 
         self._last_triggered_idx: int = -1
         self._last_trigger_wall_t: float = 0.0
@@ -59,6 +74,7 @@ class TriggerScheduler:
         slide_id: str,
         trigger_confidence: float,
         wall_time: float | None = None,
+        pp_slide_index: int | None = None,
     ) -> bool:
         """
         Check whether to fire the trigger for *next_slide_idx* now.
@@ -96,7 +112,8 @@ class TriggerScheduler:
         if wall_time - self._last_trigger_wall_t < self._cooldown_sec:
             return False
 
-        self._fire(next_slide_idx, slide_id, trigger_confidence, current_song_t, next_slide_t)
+        self._fire(next_slide_idx, slide_id, trigger_confidence, current_song_t,
+                   next_slide_t, pp_slide_index)
         self._last_triggered_idx = next_slide_idx
         self._last_trigger_wall_t = wall_time
         return True
@@ -106,6 +123,11 @@ class TriggerScheduler:
         self._last_triggered_idx = -1
         self._last_trigger_wall_t = 0.0
 
+    def _pp_trigger_url(self, pp_slide_index: int) -> str:
+        """ProPresenter REST URL that shows slide *pp_slide_index* (0-based)."""
+        target = self.pp_uuid if self.pp_uuid else "active"
+        return f"{self.pp_base_url}/v1/presentation/{target}/{pp_slide_index}/trigger"
+
     def _fire(
         self,
         slide_idx: int,
@@ -113,7 +135,19 @@ class TriggerScheduler:
         confidence: float,
         current_t: float,
         boundary_t: float,
+        pp_slide_index: int | None = None,
     ) -> None:
+        if self.pp_base_url is not None and pp_slide_index is not None:
+            url = self._pp_trigger_url(pp_slide_index)
+            if self.dry_run:
+                print(f"[TRIGGER dry-run] {slide_id}  →  GET {url}")
+                return
+            threading.Thread(
+                target=self._send_pp, args=(url, slide_id, boundary_t, confidence),
+                daemon=True,
+            ).start()
+            return
+
         payload = {
             "slide_id": slide_id,
             "slide_idx": slide_idx,
@@ -124,12 +158,23 @@ class TriggerScheduler:
         if self.dry_run:
             print(f"[TRIGGER dry-run] {payload}")
             return
+        threading.Thread(
+            target=self._send_legacy, args=(payload, slide_id, boundary_t, confidence),
+            daemon=True,
+        ).start()
+
+    def _send_pp(self, url: str, slide_id: str, boundary_t: float, confidence: float) -> None:
         try:
-            resp = requests.post(
-                self.rest_url,
-                json=payload,
-                timeout=self.rest_timeout_sec,
-            )
+            resp = requests.get(url, timeout=self.rest_timeout_sec)
+            print(f"[TRIGGER] slide={slide_id!r}  t={boundary_t:.2f}s  "
+                  f"conf={confidence:.2f}  → HTTP {resp.status_code}  {url}")
+        except requests.RequestException as exc:
+            print(f"[TRIGGER error] {url}: {exc}")
+
+    def _send_legacy(self, payload: dict, slide_id: str, boundary_t: float,
+                     confidence: float) -> None:
+        try:
+            resp = requests.post(self.rest_url, json=payload, timeout=self.rest_timeout_sec)
             print(f"[TRIGGER] slide={slide_id!r}  t={boundary_t:.2f}s  "
                   f"conf={confidence:.2f}  → HTTP {resp.status_code}")
         except requests.RequestException as exc:

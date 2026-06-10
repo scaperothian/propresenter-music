@@ -38,14 +38,19 @@ def convert(pp_json_path: Path, audio_override: str | None = None) -> dict:
 
     audio = audio_override or pres["id"]["audio"]
 
-    # Flatten every (trigger_time, group, slide) into one event per trigger time.
-    events: list[tuple[float, str, str]] = []
+    # Flatten every (trigger_time, group, slide) into one event per trigger
+    # time.  pp_idx is the slide's 0-based position in the presentation's
+    # flattened groups[].slides[] order — the index ProPresenter's REST API
+    # uses to trigger it.  Repeated trigger times (chorus) share one pp_idx.
+    events: list[tuple[float, str, str, int]] = []
+    pp_idx = 0
     for group in pres["groups"]:
         gname = group.get("name", "slide")
         for slide in group["slides"]:
             text = (slide.get("text", "") or "").strip()
             for t in slide.get("trigger time", []) or []:
-                events.append((float(t), gname, text))
+                events.append((float(t), gname, text, pp_idx))
+            pp_idx += 1
 
     if not events:
         raise ValueError(f"No trigger times found in {pp_json_path}")
@@ -54,18 +59,20 @@ def convert(pp_json_path: Path, audio_override: str | None = None) -> dict:
     events.sort(key=lambda e: e[0])
 
     slides = []
-    for i, (t, gname, text) in enumerate(events):
+    for i, (t, gname, text, idx) in enumerate(events):
         slides.append(
             {
                 "slide_id": f"{i:02d}_{_slug(gname)}",
                 "t_ref": round(t, 3),
                 "lyrics": text,
+                "pp_slide_index": idx,
             }
         )
 
     return {
         "song_id": pres["id"].get("name", pp_json_path.stem),
         "ref_audio": audio,
+        "pp_uuid": pres["id"].get("uuid", ""),
         "slides": slides,
     }
 
