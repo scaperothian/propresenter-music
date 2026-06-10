@@ -41,6 +41,7 @@ from .config import (
     LOOKBACK_SEC,
     MERT_FRAME_RATE,
     MERT_LAYER,
+    SILENCE_RMS_DBFS,
     TARGET_SR,
     TRIGGER_BUFFER_MS,
     TRIGGER_CONFIDENCE_MIN,
@@ -186,6 +187,15 @@ class SongAligner:
         if len(self._audio_ring) < self._lookback_samples:
             self._chunk_count += 1
             return {"status": "buffering", "chunk": self._chunk_count}
+
+        # Silence gate: ambient noise still DTW-matches the song's quietest
+        # section with above-threshold confidence, so an open mic before the
+        # song starts could walk the position into a boundary.  Idle instead.
+        rms_dbfs = 20.0 * np.log10(float(np.sqrt(np.mean(self._audio_ring ** 2))) + 1e-12)
+        if rms_dbfs < SILENCE_RMS_DBFS:
+            self._chunk_count += 1
+            return {"status": "silence", "chunk": self._chunk_count,
+                    "rms_dbfs": round(rms_dbfs, 1)}
 
         frames = self._embed_chunk(torch.from_numpy(self._audio_ring))  # [T, D]
         pooled_raw = frames.mean(dim=0)  # [D]

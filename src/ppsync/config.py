@@ -18,6 +18,9 @@ STRIDE_SEC = 0.020          # 20ms stride → dense reference sequence
 # Live alignment
 # ---------------------------------------------------------------------------
 CHUNK_SEC = 0.200           # audio chunk size for live embedding updates
+SILENCE_RMS_DBFS = -50.0    # skip alignment when lookback RMS is below this
+                            # (mic open but song not playing: ambient noise
+                            # still DTW-matches the song's quietest section)
 
 # ---------------------------------------------------------------------------
 # Subsequence DTW

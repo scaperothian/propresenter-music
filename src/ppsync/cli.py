@@ -98,11 +98,23 @@ def _align_parser() -> argparse.ArgumentParser:
             "system microphone or a WAV/FLAC file (for testing)."
         ),
     )
-    p.add_argument("cache", help="Path to .npz cache from ppsync-preprocess.")
+    p.add_argument(
+        "cache", nargs="?", default=None,
+        help="Path to .npz cache from ppsync-preprocess.",
+    )
 
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--mic", action="store_true", help="Capture from system microphone.")
     src.add_argument("--file", metavar="AUDIO", help="Simulate real-time from a file.")
+    src.add_argument(
+        "--list-devices", action="store_true",
+        help="List audio input devices and exit (no cache needed).",
+    )
+
+    p.add_argument(
+        "--input-device", default=None, metavar="DEV",
+        help="Input device index or name substring for --mic (default: system input).",
+    )
 
     p.add_argument(
         "--start-offset", type=float, default=0.0, metavar="SEC",
@@ -161,6 +173,19 @@ def align_main(argv: list[str] | None = None) -> None:
 
     args = _align_parser().parse_args(argv)
 
+    if args.list_devices:
+        import sounddevice as sd
+
+        for idx, dev in enumerate(sd.query_devices()):
+            if dev["max_input_channels"] > 0:
+                default = " (default)" if idx == sd.default.device[0] else ""
+                print(f"  [{idx}] {dev['name']}  "
+                      f"{int(dev['default_samplerate'])} Hz{default}")
+        return
+
+    if not args.cache:
+        _align_parser().error("cache is required unless --list-devices is given")
+
     # Auto-detect device
     if args.device:
         device = args.device
@@ -190,7 +215,10 @@ def align_main(argv: list[str] | None = None) -> None:
     )
 
     if args.mic:
-        source = MicCapture(chunk_sec=args.chunk)
+        input_dev = args.input_device
+        if input_dev is not None and input_dev.lstrip("-").isdigit():
+            input_dev = int(input_dev)
+        source = MicCapture(chunk_sec=args.chunk, device=input_dev)
         print("Listening on microphone — Ctrl+C to stop.\n")
     else:
         source = FileCapture(
@@ -208,7 +236,7 @@ def align_main(argv: list[str] | None = None) -> None:
             for chunk, wall_t in source:
                 frame = aligner.process_chunk(chunk, chunk_wall_t=wall_t)
                 logger.log(frame)
-                if frame.get("status") == "buffering":
+                if frame.get("status"):  # buffering / silence — no telemetry row
                     continue
                 status = (
                     f"  chunk={frame['chunk']:4d}"

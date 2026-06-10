@@ -33,8 +33,16 @@ class MicCapture(AudioCapture):
     """
     Capture live microphone audio via sounddevice.
 
+    The stream opens at the device's native sample rate and each block is
+    resampled to TARGET_SR — many input devices refuse non-native rates.
+
+    Backpressure: if alignment falls behind the capture rate, every block
+    queued in the meantime is drained and yielded as ONE combined chunk.
+    The aligner's audio ring buffer accepts arbitrary chunk sizes, so this
+    costs one skipped update instead of permanently growing latency.
+
     Args:
-        chunk_sec:   Duration of each yielded chunk in seconds.
+        chunk_sec:   Duration of each capture block in seconds.
         device:      sounddevice device index or name (None = default input).
     """
 
@@ -42,32 +50,48 @@ class MicCapture(AudioCapture):
         self.chunk_sec = chunk_sec
         self.device = device
         self._q: queue.Queue[np.ndarray] = queue.Queue()
-        self._stream = None
-        self._t_start: float = 0.0
+        self._status_warned = False
 
     def _callback(self, indata, frames, time_info, status):
+        if status and not self._status_warned:
+            print(f"[mic] stream status: {status}", flush=True)
+            self._status_warned = True
         self._q.put(indata[:, 0].copy())  # take first channel (mono)
 
     def __iter__(self) -> Iterator[tuple[np.ndarray, float]]:
         import sounddevice as sd
 
-        blocksize = int(self.chunk_sec * TARGET_SR)
-        self._t_start = time.monotonic()
+        dev_info = sd.query_devices(self.device, kind="input")
+        native_sr = int(dev_info["default_samplerate"])
+        blocksize = int(self.chunk_sec * native_sr)
+        print(f"[mic] {dev_info['name']}  {native_sr} Hz → {TARGET_SR} Hz, "
+              f"{self.chunk_sec * 1000:.0f}ms blocks")
 
+        t_start = time.monotonic()
+        samples_out = 0
         with sd.InputStream(
-            samplerate=TARGET_SR,
+            samplerate=native_sr,
             channels=1,
             dtype="float32",
             blocksize=blocksize,
             device=self.device,
             callback=self._callback,
         ):
-            chunk_idx = 0
             while True:
-                chunk = self._q.get()
-                wall_t = self._t_start + chunk_idx * self.chunk_sec
-                yield chunk.astype(np.float32), wall_t
-                chunk_idx += 1
+                parts = [self._q.get()]
+                while True:  # drain everything that accumulated while busy
+                    try:
+                        parts.append(self._q.get_nowait())
+                    except queue.Empty:
+                        break
+                block = np.concatenate(parts) if len(parts) > 1 else parts[0]
+                if native_sr != TARGET_SR:
+                    block = torchaudio.functional.resample(
+                        torch.from_numpy(block), native_sr, TARGET_SR
+                    ).numpy()
+                wall_t = t_start + samples_out / TARGET_SR
+                samples_out += len(block)
+                yield block.astype(np.float32, copy=False), wall_t
 
 
 class FileCapture(AudioCapture):

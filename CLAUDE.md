@@ -119,6 +119,15 @@ fallback during low-confidence stretches.  Boundaries crossed less than
 `TRIGGER_LATE_GRACE_SEC` ago still fire (late slide > no slide); older ones
 are skipped (mid-song join).
 
+**Mic capture: native rate + queue draining + silence gate.**  `MicCapture`
+opens the stream at the device's native sample rate and resamples each block
+(devices often refuse 24kHz).  If alignment falls behind, all queued blocks
+are drained into one combined chunk — the audio ring absorbs any chunk size —
+so latency stays bounded instead of growing forever.  The aligner skips all
+layers while the lookback RMS is under `SILENCE_RMS_DBFS`: ambient noise
+DTW-matches the song's quietest section with above-threshold confidence, so
+an open mic before the song starts could otherwise walk into a boundary.
+
 **No Sakoe-Chiba band in `subsequence_dtw`.**  A band of `|i - j| <= k` is wrong for subsequence DTW because the optimal path is offset by the match position, not near (0,0).  The reference window passed by `align()` is already narrow (±`dtw_context_sec` around the candidate), which limits the search space without breaking correctness.
 
 **Contrastive normalization, not ZCA.**  `apply_contrastive` subtracts the song-level mean then L2-normalizes.  This removes the dominant "sounds like music" direction that makes all sections score ~0.9 cosine similarity.  ZCA from `mert-experiment` is more powerful but expensive; add it if per-slide similarity remains too high.

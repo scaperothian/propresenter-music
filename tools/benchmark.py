@@ -100,7 +100,7 @@ def run_offset(
             bar.close()
             break
         frame = aligner.process_chunk(chunk, chunk_wall_t=song_t)
-        if frame.get("status") == "buffering":
+        if frame.get("status"):  # buffering / silence
             continue
         max_proc_ms = max(max_proc_ms, frame.get("processing_ms", 0.0))
 
