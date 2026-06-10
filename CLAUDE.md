@@ -118,10 +118,12 @@ position permanently.
 `expected_pos_t` is a probability-weighted average of slide *midpoints* — it
 crosses a boundary only after the boundary has passed, so boundary triggers
 driven by it fire seconds late or never.  When DTW is confident the trigger
-compares `refined_t` against the first unfired boundary; the HMM is the
-fallback during low-confidence stretches.  Boundaries crossed less than
-`TRIGGER_LATE_GRACE_SEC` ago still fire (late slide > no slide); older ones
-are skipped (mid-song join).
+compares `refined_t` against the slide instance containing it (see
+`select_trigger_boundary`); the HMM is the fallback during low-confidence
+stretches.  On lock-on (mid-song join) or after a boundary is stepped over by
+jitter, the CURRENT slide fires immediately as a catch-up — the screen must
+show where the song is now — and only instances strictly before it are
+skipped.
 
 **Mic capture: native rate + queue draining + silence gate.**  `MicCapture`
 opens the stream at the device's native sample rate and resamples each block

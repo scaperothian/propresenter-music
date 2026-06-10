@@ -129,6 +129,8 @@ def run_offset(
     spurious = 0
     for trig in triggers:
         sid = trig["slide_id"]
+        if sid in gt_by_id and gt_by_id[sid] < horizon:
+            continue  # catch-up fire for a pre-warmup boundary — by design
         err = abs(trig["fire_t"] - gt_by_id[sid]) if sid in gt_by_id else float("inf")
         if err <= window_sec and sid not in matched_ids:
             matched_ids.add(sid)

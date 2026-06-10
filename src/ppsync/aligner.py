@@ -45,7 +45,6 @@ from .config import (
     TARGET_SR,
     TRIGGER_BUFFER_MS,
     TRIGGER_CONFIDENCE_MIN,
-    TRIGGER_LATE_GRACE_SEC,
 )
 from .dtw import align as dtw_align
 from .embed import embed_chunk_live
@@ -53,6 +52,29 @@ from .hmm import HMMPredictor
 from .preprocess import load_cache
 from .transform import apply_contrastive
 from .trigger import TriggerScheduler
+
+
+def select_trigger_boundary(
+    last_triggered_idx: int,
+    slide_t_refs: np.ndarray,
+    pos_t: float,
+) -> tuple[list[int], int]:
+    """
+    Pick which slide boundary the trigger should aim at.
+
+    The target is the slide instance containing *pos_t* (catch-up: on a
+    mid-song join or after a low-confidence gap the CURRENT slide must be
+    shown immediately, not silently skipped while waiting for the next
+    boundary).  Instances strictly before it are returned as skips.  If
+    everything up to pos_t has already fired, aim at the next boundary.
+
+    Returns:
+        (skip_indices, boundary_idx)
+    """
+    current = int(np.searchsorted(slide_t_refs, pos_t, side="right")) - 1
+    first_unfired = last_triggered_idx + 1
+    skips = list(range(first_unfired, current))
+    return skips, max(first_unfired, current)
 
 
 class SongAligner:
@@ -276,20 +298,20 @@ class SongAligner:
             pos_t = hmm_out["expected_pos_t"]
             pos_conf = trigger_conf
 
-        # Aim at the first boundary not yet fired.  Boundaries left more than
-        # the grace window behind (mid-song join, long low-confidence gap) are
-        # skipped; ones crossed just now fire late rather than never — DTW
-        # jitter can step pos_t past a boundary between two chunks.  Only a
-        # confident position estimate may consume boundaries.
+        # Aim at the slide instance containing pos_t (catch-up: a mid-song
+        # join or a boundary stepped over by DTW jitter must still show the
+        # CURRENT slide, immediately and at most once); instances strictly
+        # before it are skipped.  Only a confident position estimate may
+        # consume boundaries.
         triggered = False
         triggered_slide_id = None
         boundary_idx = len(self.slide_ids)
         if pos_conf >= self.trigger.confidence_min:
-            boundary_idx = self.trigger.last_triggered_idx + 1
-            while (boundary_idx < len(self.slide_ids)
-                   and pos_t > self.slide_t_refs[boundary_idx] + TRIGGER_LATE_GRACE_SEC):
-                self.trigger.mark_skipped(boundary_idx)
-                boundary_idx += 1
+            skips, boundary_idx = select_trigger_boundary(
+                self.trigger.last_triggered_idx, self.slide_t_refs, pos_t
+            )
+            for k in skips:
+                self.trigger.mark_skipped(k)
         if boundary_idx < len(self.slide_ids):
             triggered = self.trigger.update(
                 current_song_t=pos_t,

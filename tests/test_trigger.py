@@ -93,3 +93,49 @@ def test_pp_mode_sends_get_to_mapped_slide(monkeypatch):
             break
         time.sleep(0.01)
     assert calls == ["http://pp:1025/v1/presentation/ABC-123/4/trigger"]
+
+
+# ---------------------------------------------------------------------------
+# Boundary selection (aligner.select_trigger_boundary)
+# ---------------------------------------------------------------------------
+
+import numpy as np
+
+from ppsync.aligner import select_trigger_boundary
+
+T_REFS = np.array([0.0, 30.0, 42.0, 54.0, 64.0, 74.0, 86.0, 95.0,
+                   106.0, 117.0], dtype=np.float64)
+
+
+def test_midsong_join_fires_current_slide_and_skips_older():
+    """Lock-on inside slide 8 (106-117s): skip 0-7, fire 8 immediately."""
+    skips, boundary = select_trigger_boundary(-1, T_REFS, 110.0)
+    assert skips == list(range(0, 8))
+    assert boundary == 8
+
+
+def test_normal_progress_aims_at_next_boundary():
+    """Mid slide 3, slide 3 already fired: aim at 4, nothing skipped."""
+    skips, boundary = select_trigger_boundary(3, T_REFS, 60.0)
+    assert skips == []
+    assert boundary == 4
+
+
+def test_jitter_step_over_boundary_still_fires_it():
+    """pos jumps from 63.9 to 64.3 between chunks: slide 4 fires late."""
+    skips, boundary = select_trigger_boundary(3, T_REFS, 64.3)
+    assert skips == []
+    assert boundary == 4
+
+
+def test_cold_start_at_song_beginning_fires_first_slide():
+    skips, boundary = select_trigger_boundary(-1, T_REFS, 7.0)
+    assert skips == []
+    assert boundary == 0
+
+
+def test_position_behind_already_fired_aims_forward():
+    """DTW slips backward after slide 5 fired: keep aiming at 6."""
+    skips, boundary = select_trigger_boundary(5, T_REFS, 70.0)
+    assert skips == []
+    assert boundary == 6
