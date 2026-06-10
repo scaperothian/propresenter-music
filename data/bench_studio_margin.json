@@ -1,0 +1,367 @@
+[
+  {
+    "offset": 0.0,
+    "duration": null,
+    "dtw_med_s": 0.15000000000000568,
+    "dtw_p90_s": 0.40000000000000213,
+    "hmm_med_s": 3.5250000000000057,
+    "hmm_p90_s": 12.497000000000009,
+    "track_pct": 1.0,
+    "lock_on_s": 5.6,
+    "reachable": 14,
+    "hits": 14,
+    "recall": 1.0,
+    "fire_mae_ms": 95.71428571428494,
+    "fire_max_ms": 259.00000000000034,
+    "spurious": 0,
+    "n_triggers": 15,
+    "proc_mean_ms": 66.37857769973661,
+    "proc_p50_ms": 66.3,
+    "proc_p95_ms": 67.7,
+    "max_proc_ms": 115.0,
+    "rt_ok_pct": 1.0,
+    "missed": [],
+    "triggered": [
+      [
+        "00_verse1",
+        6.0
+      ],
+      [
+        "01_verse1",
+        30.8
+      ],
+      [
+        "02_prechorus",
+        42.2
+      ],
+      [
+        "03_prechorus",
+        53.8
+      ],
+      [
+        "04_chorus",
+        63.8
+      ],
+      [
+        "05_chorus",
+        74.4
+      ],
+      [
+        "06_verse2",
+        85.8
+      ],
+      [
+        "07_verse2",
+        94.6
+      ],
+      [
+        "08_prechorus2",
+        105.8
+      ],
+      [
+        "09_prechorus2",
+        117.2
+      ],
+      [
+        "10_chorus",
+        128.4
+      ],
+      [
+        "11_chorus",
+        138.0
+      ],
+      [
+        "12_bridge",
+        169.0
+      ],
+      [
+        "13_chorus",
+        181.8
+      ],
+      [
+        "14_chorus",
+        194.0
+      ]
+    ]
+  },
+  {
+    "offset": 20.0,
+    "duration": null,
+    "dtw_med_s": 0.14999999999999858,
+    "dtw_p90_s": 0.3999999999999986,
+    "hmm_med_s": 3.466000000000008,
+    "hmm_p90_s": 12.895600000000007,
+    "track_pct": 1.0,
+    "lock_on_s": 5.600000000000001,
+    "reachable": 14,
+    "hits": 14,
+    "recall": 1.0,
+    "fire_mae_ms": 95.71428571428494,
+    "fire_max_ms": 259.00000000000034,
+    "spurious": 0,
+    "n_triggers": 15,
+    "proc_mean_ms": 66.2014436958614,
+    "proc_p50_ms": 66.2,
+    "proc_p95_ms": 67.1,
+    "max_proc_ms": 118.8,
+    "rt_ok_pct": 1.0,
+    "missed": [],
+    "triggered": [
+      [
+        "00_verse1",
+        26.0
+      ],
+      [
+        "01_verse1",
+        30.8
+      ],
+      [
+        "02_prechorus",
+        42.2
+      ],
+      [
+        "03_prechorus",
+        53.8
+      ],
+      [
+        "04_chorus",
+        63.8
+      ],
+      [
+        "05_chorus",
+        74.4
+      ],
+      [
+        "06_verse2",
+        85.8
+      ],
+      [
+        "07_verse2",
+        94.6
+      ],
+      [
+        "08_prechorus2",
+        105.8
+      ],
+      [
+        "09_prechorus2",
+        117.2
+      ],
+      [
+        "10_chorus",
+        128.4
+      ],
+      [
+        "11_chorus",
+        138.0
+      ],
+      [
+        "12_bridge",
+        169.0
+      ],
+      [
+        "13_chorus",
+        181.8
+      ],
+      [
+        "14_chorus",
+        194.0
+      ]
+    ]
+  },
+  {
+    "offset": 62.0,
+    "duration": null,
+    "dtw_med_s": 0.15000000000000568,
+    "dtw_p90_s": 0.39999999999999714,
+    "hmm_med_s": 3.6910000000000025,
+    "hmm_p90_s": 12.910000000000002,
+    "track_pct": 1.0,
+    "lock_on_s": 5.599999999999994,
+    "reachable": 10,
+    "hits": 10,
+    "recall": 1.0,
+    "fire_mae_ms": 73.89999999999901,
+    "fire_max_ms": 185.00000000000227,
+    "spurious": 0,
+    "n_triggers": 11,
+    "proc_mean_ms": 66.39710494571773,
+    "proc_p50_ms": 66.4,
+    "proc_p95_ms": 67.6,
+    "max_proc_ms": 78.5,
+    "rt_ok_pct": 1.0,
+    "missed": [],
+    "triggered": [
+      [
+        "04_chorus",
+        68.0
+      ],
+      [
+        "05_chorus",
+        74.4
+      ],
+      [
+        "06_verse2",
+        85.8
+      ],
+      [
+        "07_verse2",
+        94.6
+      ],
+      [
+        "08_prechorus2",
+        105.8
+      ],
+      [
+        "09_prechorus2",
+        117.2
+      ],
+      [
+        "10_chorus",
+        128.4
+      ],
+      [
+        "11_chorus",
+        138.0
+      ],
+      [
+        "12_bridge",
+        169.0
+      ],
+      [
+        "13_chorus",
+        181.8
+      ],
+      [
+        "14_chorus",
+        194.0
+      ]
+    ]
+  },
+  {
+    "offset": 66.0,
+    "duration": null,
+    "dtw_med_s": 0.15000000000000568,
+    "dtw_p90_s": 0.4000000000000057,
+    "hmm_med_s": 3.7190000000000225,
+    "hmm_p90_s": 13.082199999999995,
+    "track_pct": 1.0,
+    "lock_on_s": 5.599999999999994,
+    "reachable": 10,
+    "hits": 10,
+    "recall": 1.0,
+    "fire_mae_ms": 73.89999999999901,
+    "fire_max_ms": 185.00000000000227,
+    "spurious": 0,
+    "n_triggers": 11,
+    "proc_mean_ms": 67.02880098887516,
+    "proc_p50_ms": 66.4,
+    "proc_p95_ms": 68.4,
+    "max_proc_ms": 112.9,
+    "rt_ok_pct": 1.0,
+    "missed": [],
+    "triggered": [
+      [
+        "04_chorus",
+        72.0
+      ],
+      [
+        "05_chorus",
+        74.4
+      ],
+      [
+        "06_verse2",
+        85.8
+      ],
+      [
+        "07_verse2",
+        94.6
+      ],
+      [
+        "08_prechorus2",
+        105.8
+      ],
+      [
+        "09_prechorus2",
+        117.2
+      ],
+      [
+        "10_chorus",
+        128.4
+      ],
+      [
+        "11_chorus",
+        138.0
+      ],
+      [
+        "12_bridge",
+        169.0
+      ],
+      [
+        "13_chorus",
+        181.8
+      ],
+      [
+        "14_chorus",
+        194.0
+      ]
+    ]
+  },
+  {
+    "offset": 90.0,
+    "duration": null,
+    "dtw_med_s": 0.14999999999997726,
+    "dtw_p90_s": 0.39999999999997726,
+    "hmm_med_s": 4.11999999999999,
+    "hmm_p90_s": 13.687799999999982,
+    "track_pct": 1.0,
+    "lock_on_s": 5.599999999999994,
+    "reachable": 7,
+    "hits": 7,
+    "recall": 1.0,
+    "fire_mae_ms": 47.71428571428414,
+    "fire_max_ms": 115.0000000000091,
+    "spurious": 0,
+    "n_triggers": 8,
+    "proc_mean_ms": 69.8322206095791,
+    "proc_p50_ms": 66.5,
+    "proc_p95_ms": 98.46000000000001,
+    "max_proc_ms": 127.1,
+    "rt_ok_pct": 1.0,
+    "missed": [],
+    "triggered": [
+      [
+        "07_verse2",
+        96.0
+      ],
+      [
+        "08_prechorus2",
+        105.8
+      ],
+      [
+        "09_prechorus2",
+        117.2
+      ],
+      [
+        "10_chorus",
+        128.4
+      ],
+      [
+        "11_chorus",
+        138.0
+      ],
+      [
+        "12_bridge",
+        169.0
+      ],
+      [
+        "13_chorus",
+        181.8
+      ],
+      [
+        "14_chorus",
+        194.0
+      ]
+    ]
+  }
+]

@@ -40,8 +40,10 @@ from .config import (
     DTW_MIN_LIVE_SEC,
     DTW_SEARCH_SEC,
     INIT_AGREE_SEC,
+    INIT_BUFFER_SEC,
     INIT_CAND_SEP_SEC,
     INIT_CONSISTENT_FRAMES,
+    INIT_MIN_COST_MARGIN,
     INIT_TOP_K,
     JUMP_AGREE_SEC,
     JUMP_CONFIRM_FRAMES,
@@ -175,10 +177,14 @@ class SongAligner:
         self._lookback_samples = int(LOOKBACK_SEC * TARGET_SR)
 
         # Pooled embedding ring buffer for DTW.  DTW starts once the buffer
-        # holds DTW_MIN_LIVE_SEC (a short query matches noise confidently) and
-        # keeps growing to dtw_live_sec for a richer query thereafter.
-        max_dtw_embs = int(dtw_live_sec / chunk_sec)
-        self._dtw_emb_buffer: deque[np.ndarray] = deque(maxlen=max_dtw_embs)
+        # holds DTW_MIN_LIVE_SEC (a short query matches noise confidently).
+        # PRE-LOCK the buffer grows to INIT_BUFFER_SEC — identical repeats
+        # (chorus pairs) can only be told apart once the query spans a section
+        # transition, so the initial decision needs more context than one
+        # slide.  After lock it is trimmed to dtw_live_sec for cheap tracking.
+        self._steady_dtw_embs = int(dtw_live_sec / chunk_sec)
+        init_embs = max(int(INIT_BUFFER_SEC / chunk_sec), self._steady_dtw_embs)
+        self._dtw_emb_buffer: deque[np.ndarray] = deque(maxlen=init_embs)
         self._min_dtw_embs = int(DTW_MIN_LIVE_SEC / chunk_sec)
 
         # Search window state
@@ -204,7 +210,8 @@ class SongAligner:
     def reset(self) -> None:
         """Full reset for a new song or manual resync."""
         self._audio_ring = np.zeros(0, dtype=np.float32)
-        self._dtw_emb_buffer.clear()
+        init_embs = max(int(INIT_BUFFER_SEC / self.chunk_sec), self._steady_dtw_embs)
+        self._dtw_emb_buffer = deque(maxlen=init_embs)
         self._search_lo_t = 0.0
         self._search_hi_t = float(self.ref_timestamps[-1]) if len(self.ref_timestamps) else self.dtw_search_sec
         self._initialized = False
@@ -299,16 +306,25 @@ class SongAligner:
         if dtw_confidence >= CONFIDENCE_THRESHOLD:
             if not self._initialized:
                 # Initial lock: require consecutive confident frames agreeing
-                # on position before anchoring anywhere.
+                # on position AND a clear best-vs-runner-up cost margin —
+                # identical repeats (chorus pairs) tie on cost, and locking on
+                # a tie picks an arbitrary instance.  Keep listening instead;
+                # the growing query eventually spans a section transition.
                 self._init_hist.append(refined_t)
                 if (len(self._init_hist) == self._init_hist.maxlen
-                        and max(self._init_hist) - min(self._init_hist) <= INIT_AGREE_SEC):
+                        and max(self._init_hist) - min(self._init_hist) <= INIT_AGREE_SEC
+                        and dtw_result["cost_margin"] >= INIT_MIN_COST_MARGIN):
                     self._initialized = True
                     obs_accepted = True
                     self._advance_anchor(refined_t)
                     slide_idx = max(0, int(np.searchsorted(
                         self.slide_t_refs, refined_t, side="right")) - 1)
                     self.hmm.set_prior_from_coarse(slide_idx, confidence=0.8)
+                    # Trim the query buffer to the cheap steady-state size.
+                    self._dtw_emb_buffer = deque(
+                        list(self._dtw_emb_buffer)[-self._steady_dtw_embs:],
+                        maxlen=self._steady_dtw_embs,
+                    )
             elif refined_t - self._confirmed_t > JUMP_GUARD_SEC:
                 # Big forward jump: wrong-repeat matches look exactly like
                 # this.  Require agreeing consecutive frames to accept.

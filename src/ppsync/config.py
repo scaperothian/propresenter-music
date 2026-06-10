@@ -37,6 +37,16 @@ INIT_TOP_K = 5              # cosine candidates DTW-refined during initial lock
 INIT_CAND_SEP_SEC = 8.0     # min separation between those candidates
 INIT_CONSISTENT_FRAMES = 3  # consecutive confident frames required to lock
 INIT_AGREE_SEC = 3.0        # ...all within this span of each other
+INIT_BUFFER_SEC = 16.0      # pre-lock DTW query capacity — longer than one
+                            # slide (~14s avg) so the query spans a section
+                            # transition; identical repeats (chorus pairs) are
+                            # indistinguishable without one.  Costs no extra
+                            # MERT compute, only cheap DTW.
+INIT_MIN_COST_MARGIN = 0.05  # refuse to lock while best-vs-runner-up DTW cost
+                             # margin is below this (tie = ambiguous repeat).
+                             # Live wrong-lock ties measured 0.00-0.047
+                             # (/tmp/ppsync.jsonl, chorus join at 62s);
+                             # correct studio locks measure ~0.23.
 JUMP_GUARD_SEC = 5.0        # forward jumps larger than this need confirmation
 JUMP_CONFIRM_FRAMES = 3     # consecutive agreeing frames to accept a big jump
 JUMP_AGREE_SEC = 2.5        # agreement tolerance for those frames
