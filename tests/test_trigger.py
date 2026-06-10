@@ -58,41 +58,39 @@ def test_mark_skipped_advances_pointer():
     assert t.last_triggered_idx == 3
 
 
-def test_pp_url_uses_uuid_and_pp_index():
-    t = TriggerScheduler(pp_base_url="http://pp:1025/", pp_uuid="ABC-123")
-    assert (t._pp_trigger_url(4)
-            == "http://pp:1025/v1/presentation/ABC-123/4/trigger")
+class FakeController:
+    """Stands in for propresenter_client.ProPresenterController."""
+
+    def __init__(self):
+        self.calls: list[int] = []
+
+    def go_to_slide(self, slide_number: int) -> bool:
+        self.calls.append(slide_number)
+        return True
 
 
-def test_pp_url_falls_back_to_active_without_uuid():
-    t = TriggerScheduler(pp_base_url="http://pp:1025")
-    assert (t._pp_trigger_url(7)
-            == "http://pp:1025/v1/presentation/active/7/trigger")
-
-
-def test_pp_mode_sends_get_to_mapped_slide(monkeypatch):
-    """Repeated chorus instance (manifest idx 10) must hit pp slide 4."""
-    calls = []
-
-    class FakeResp:
-        status_code = 200
-
-    monkeypatch.setattr(
-        trigger_mod.requests, "get",
-        lambda url, timeout=None: calls.append(url) or FakeResp(),
-    )
-
-    t = TriggerScheduler(pp_base_url="http://pp:1025", pp_uuid="ABC-123")
+def test_pp_mode_calls_go_to_slide_with_mapped_index():
+    """Repeated chorus instance (manifest idx 10) must hit pp slide 4
+    — go_to_slide is 1-indexed, so it receives 5."""
+    ctrl = FakeController()
+    t = TriggerScheduler(pp_controller=ctrl)
     fired = t.update(**_fire_kwargs(next_slide_idx=10, slide_id="10_chorus",
                                     pp_slide_index=4))
     assert fired
-    # _fire runs the request on a daemon thread; join via polling.
+    # _fire runs on a daemon thread; join via polling.
     import time
     for _ in range(100):
-        if calls:
+        if ctrl.calls:
             break
         time.sleep(0.01)
-    assert calls == ["http://pp:1025/v1/presentation/ABC-123/4/trigger"]
+    assert ctrl.calls == [5]
+
+
+def test_pp_dry_run_does_not_call_controller():
+    ctrl = FakeController()
+    t = TriggerScheduler(pp_controller=ctrl, dry_run=True)
+    assert t.update(**_fire_kwargs(pp_slide_index=3))
+    assert ctrl.calls == []
 
 
 # ---------------------------------------------------------------------------

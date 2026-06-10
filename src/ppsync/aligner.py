@@ -37,7 +37,15 @@ from .config import (
     CHUNK_SEC,
     CONFIDENCE_THRESHOLD,
     DTW_LIVE_SEC,
+    DTW_MIN_LIVE_SEC,
     DTW_SEARCH_SEC,
+    INIT_AGREE_SEC,
+    INIT_CAND_SEP_SEC,
+    INIT_CONSISTENT_FRAMES,
+    INIT_TOP_K,
+    JUMP_AGREE_SEC,
+    JUMP_CONFIRM_FRAMES,
+    JUMP_GUARD_SEC,
     LOOKBACK_SEC,
     MERT_FRAME_RATE,
     MERT_LAYER,
@@ -99,7 +107,7 @@ class SongAligner:
         processor=None,
         device: str = "cpu",
         rest_url: str = "http://localhost:5000/slide",
-        pp_url: str | None = None,
+        pp_controller=None,
         trigger_buffer_ms: float = TRIGGER_BUFFER_MS,
         trigger_conf_min: float = TRIGGER_CONFIDENCE_MIN,
         dry_run: bool = False,
@@ -128,7 +136,7 @@ class SongAligner:
             self.slide_pp_indices: np.ndarray = cache["slide_pp_indices"]
         else:
             self.slide_pp_indices = np.arange(len(self.slide_ids), dtype=np.int32)
-        pp_uuid = str(cache["pp_uuid"]) if "pp_uuid" in cache else ""
+        self.pp_uuid: str = str(cache["pp_uuid"]) if "pp_uuid" in cache else ""
         self.global_emb: np.ndarray = cache["global_emb"]      # [D]
         self.global_emb_t = torch.from_numpy(self.global_emb)
         self.song_duration: float = float(cache["song_duration"])
@@ -154,8 +162,7 @@ class SongAligner:
             buffer_ms=trigger_buffer_ms,
             confidence_min=trigger_conf_min,
             dry_run=dry_run,
-            pp_base_url=pp_url,
-            pp_uuid=pp_uuid,
+            pp_controller=pp_controller,
         )
 
         # Audio ring buffer spanning the lookback window.  The whole window is
@@ -167,15 +174,26 @@ class SongAligner:
         self._audio_ring: np.ndarray = np.zeros(0, dtype=np.float32)
         self._lookback_samples = int(LOOKBACK_SEC * TARGET_SR)
 
-        # Pooled embedding ring buffer for DTW
-        max_dtw_embs = int(dtw_live_sec / chunk_sec) + 2
+        # Pooled embedding ring buffer for DTW.  DTW starts once the buffer
+        # holds DTW_MIN_LIVE_SEC (a short query matches noise confidently) and
+        # keeps growing to dtw_live_sec for a richer query thereafter.
+        max_dtw_embs = int(dtw_live_sec / chunk_sec)
         self._dtw_emb_buffer: deque[np.ndarray] = deque(maxlen=max_dtw_embs)
+        self._min_dtw_embs = int(DTW_MIN_LIVE_SEC / chunk_sec)
 
         # Search window state
         self._search_lo_t: float = 0.0
         self._search_hi_t: float = float(self.ref_timestamps[-1]) if len(self.ref_timestamps) else dtw_search_sec
         self._initialized: bool = False
         self._confirmed_t: float = 0.0  # last high-confidence song position
+
+        # Initial-lock consistency: repeated sections produce ambiguous
+        # matches, so the first anchor needs several agreeing confident frames.
+        self._init_hist: deque[float] = deque(maxlen=INIT_CONSISTENT_FRAMES)
+        # Jump guard: a single confident frame must not move the anchor by
+        # more than JUMP_GUARD_SEC — wrong-repeat matches look exactly like
+        # this and the forward-only ratchet would lock them in.
+        self._jump_hist: deque[float] = deque(maxlen=JUMP_CONFIRM_FRAMES)
 
         self._chunk_count: int = 0
 
@@ -191,9 +209,17 @@ class SongAligner:
         self._search_hi_t = float(self.ref_timestamps[-1]) if len(self.ref_timestamps) else self.dtw_search_sec
         self._initialized = False
         self._confirmed_t = 0.0
+        self._init_hist.clear()
+        self._jump_hist.clear()
         self._chunk_count = 0
         self.hmm.reset()
         self.trigger.reset()
+
+    def _advance_anchor(self, refined_t: float) -> None:
+        """Move the confirmed position and re-center the search window."""
+        self._confirmed_t = refined_t
+        self._search_lo_t = max(0.0, refined_t - 2.0)
+        self._search_hi_t = refined_t + self.dtw_search_sec
 
     def process_chunk(
         self,
@@ -235,8 +261,8 @@ class SongAligner:
         self._dtw_emb_buffer.append(pooled_norm)
 
         # DTW on a near-empty buffer matches noise confidently (a 1-frame query
-        # fits anywhere); hold off all alignment layers until the buffer is full.
-        if len(self._dtw_emb_buffer) < self._dtw_emb_buffer.maxlen:
+        # fits anywhere); hold off all alignment until it has minimum context.
+        if len(self._dtw_emb_buffer) < self._min_dtw_embs:
             self._chunk_count += 1
             return {"status": "buffering", "chunk": self._chunk_count}
 
@@ -244,14 +270,6 @@ class SongAligner:
         sims = self.slide_protos @ pooled_norm  # [N_slides]
         coarse_slide_idx = int(np.argmax(sims))
         coarse_confidence = float(sims[coarse_slide_idx])
-
-        # On first confident coarse match, seed the HMM and narrow the window
-        if not self._initialized and coarse_confidence > CONFIDENCE_THRESHOLD:
-            self._confirmed_t = float(self.slide_t_refs[coarse_slide_idx])
-            self._search_lo_t = max(0.0, self._confirmed_t - 5.0)
-            self._search_hi_t = self._confirmed_t + self.dtw_search_sec
-            self.hmm.set_prior_from_coarse(coarse_slide_idx, confidence=coarse_confidence)
-            self._initialized = True
 
         # ---- Layer 2: Subsequence DTW ----------------------------------------
         live_buffer = np.stack(list(self._dtw_emb_buffer))  # [M, D]
@@ -265,20 +283,54 @@ class SongAligner:
             search_hi_t=self._search_hi_t,
             dtw_context_sec=dtw_ctx_sec,
             band_ratio=0.1,
+            # Pre-lock the search is song-wide and repeats are ambiguous:
+            # DTW-refine several separated cosine candidates, best cost wins.
+            top_k=1 if self._initialized else INIT_TOP_K,
+            cand_min_sep_sec=INIT_CAND_SEP_SEC,
         )
         refined_t = dtw_result["refined_t"]
         dtw_confidence = dtw_result["confidence"]
 
-        # Advance search window anchor when DTW is confident
-        if dtw_confidence >= CONFIDENCE_THRESHOLD and refined_t > self._confirmed_t:
-            self._confirmed_t = refined_t
-            self._search_lo_t = max(0.0, refined_t - 2.0)
-            self._search_hi_t = refined_t + self.dtw_search_sec
+        # ---- Anchor management: initial lock + jump guard ---------------------
+        # obs_accepted: this frame's refined_t may be trusted downstream
+        # (HMM observation, trigger position).  A confident frame is NOT
+        # accepted while the initial lock or a large jump is unconfirmed.
+        obs_accepted = False
+        if dtw_confidence >= CONFIDENCE_THRESHOLD:
+            if not self._initialized:
+                # Initial lock: require consecutive confident frames agreeing
+                # on position before anchoring anywhere.
+                self._init_hist.append(refined_t)
+                if (len(self._init_hist) == self._init_hist.maxlen
+                        and max(self._init_hist) - min(self._init_hist) <= INIT_AGREE_SEC):
+                    self._initialized = True
+                    obs_accepted = True
+                    self._advance_anchor(refined_t)
+                    slide_idx = max(0, int(np.searchsorted(
+                        self.slide_t_refs, refined_t, side="right")) - 1)
+                    self.hmm.set_prior_from_coarse(slide_idx, confidence=0.8)
+            elif refined_t - self._confirmed_t > JUMP_GUARD_SEC:
+                # Big forward jump: wrong-repeat matches look exactly like
+                # this.  Require agreeing consecutive frames to accept.
+                self._jump_hist.append(refined_t)
+                if (len(self._jump_hist) == self._jump_hist.maxlen
+                        and max(self._jump_hist) - min(self._jump_hist) <= JUMP_AGREE_SEC):
+                    obs_accepted = True
+                    self._advance_anchor(refined_t)
+                    self._jump_hist.clear()
+            else:
+                obs_accepted = True
+                self._jump_hist.clear()
+                if refined_t > self._confirmed_t:
+                    self._advance_anchor(refined_t)
+        else:
+            self._init_hist.clear()
+            self._jump_hist.clear()
 
         # ---- Layer 3: HMM predictor ------------------------------------------
         hmm_out = self.hmm.update(
             obs_t=refined_t,
-            dtw_confidence=dtw_confidence,
+            dtw_confidence=dtw_confidence if obs_accepted else 0.0,
             coarse_slide_idx=coarse_slide_idx,
         )
         current_slide = hmm_out["current_slide"]
@@ -286,12 +338,12 @@ class SongAligner:
         predicted_next_t = hmm_out["predicted_next_t"]
 
         # ---- Trigger ---------------------------------------------------------
-        # Drive the trigger from the DTW position when it is confident: the
-        # HMM's expected_pos_t is a probability-weighted average of slide
-        # MIDPOINTS, so it structurally lags the true position and crosses a
-        # boundary only after the boundary has already passed.  The HMM path
-        # remains the fallback for low-confidence stretches.
-        if dtw_confidence >= CONFIDENCE_THRESHOLD:
+        # Drive the trigger from the DTW position when it is confident and
+        # accepted by the anchor logic: the HMM's expected_pos_t is a
+        # probability-weighted average of slide MIDPOINTS, so it structurally
+        # lags the true position.  The HMM path remains the fallback for
+        # low-confidence stretches; nothing fires before the initial lock.
+        if obs_accepted:
             pos_t = refined_t
             pos_conf = dtw_confidence
         else:
@@ -306,7 +358,7 @@ class SongAligner:
         triggered = False
         triggered_slide_id = None
         boundary_idx = len(self.slide_ids)
-        if pos_conf >= self.trigger.confidence_min:
+        if self._initialized and pos_conf >= self.trigger.confidence_min:
             skips, boundary_idx = select_trigger_boundary(
                 self.trigger.last_triggered_idx, self.slide_t_refs, pos_t
             )
@@ -340,8 +392,13 @@ class SongAligner:
             "dtw_refined_t": round(refined_t, 3),
             "dtw_path_cost": round(dtw_result["path_cost"], 4) if dtw_result["path_cost"] != float("inf") else None,
             "dtw_confidence": round(dtw_confidence, 4),
+            "dtw_cost_margin": round(dtw_result.get("cost_margin", 0.0), 4),
             "dtw_search_lo": round(dtw_result["search_lo_t"], 3),
             "dtw_search_hi": round(dtw_result["search_hi_t"], 3),
+            # Anchor state
+            "initialized": self._initialized,
+            "obs_accepted": obs_accepted,
+            "jump_pending": len(self._jump_hist) > 0,
             # HMM
             "hmm_current_slide": current_slide,
             "hmm_current_slide_id": self.slide_ids[current_slide],

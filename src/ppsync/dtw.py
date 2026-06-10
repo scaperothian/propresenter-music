@@ -135,6 +135,37 @@ def similarity_search(
     return lo + rel_best, float(sims[rel_best])
 
 
+def topk_candidates(
+    live_emb: np.ndarray,    # [D] single L2-normalized live embedding
+    ref_embs: np.ndarray,    # [N_ref, D]
+    search_lo: int,
+    search_hi: int,
+    k: int,
+    min_sep: int,            # minimum index separation between candidates
+) -> list[int]:
+    """
+    Top-k cosine peaks with non-max suppression.
+
+    Repeated sections (chorus, riff-based verses/outros) produce several
+    near-equal cosine peaks; returning all of them lets DTW disambiguate
+    using the full live buffer instead of trusting the single best 2s match.
+    """
+    lo = max(0, search_lo)
+    hi = min(len(ref_embs), search_hi)
+    if lo >= hi:
+        lo, hi = 0, len(ref_embs)
+
+    sims = ref_embs[lo:hi] @ live_emb  # [W]
+    order = np.argsort(sims)[::-1]
+    picks: list[int] = []
+    for rel in order:
+        if all(abs(int(rel) - (p - lo)) >= min_sep for p in picks):
+            picks.append(lo + int(rel))
+            if len(picks) == k:
+                break
+    return picks
+
+
 # ---------------------------------------------------------------------------
 # Full DTW alignment step (step 1 + step 2)
 # ---------------------------------------------------------------------------
@@ -147,15 +178,25 @@ def align(
     search_hi_t: float,       # upper bound of search window (seconds)
     dtw_context_sec: float,   # half-width of DTW reference window around candidate
     band_ratio: float = 0.1,
+    top_k: int = 1,
+    cand_min_sep_sec: float = 8.0,
 ) -> dict:
     """
     Two-step alignment: cosine search → DTW refinement.
+
+    With ``top_k > 1`` the cosine search returns several well-separated
+    candidate regions and each is DTW-refined; the lowest path cost wins.
+    Use this when the search window is wide (initial lock) — for repetitive
+    songs the single best 2s cosine match often lands on the wrong repeat,
+    and only the multi-second DTW query can tell them apart.
 
     Returns a dict with keys:
         candidate_t      float   coarse position from cosine search (seconds)
         refined_t        float   refined position from DTW (seconds)
         path_cost        float   DTW path cost
         confidence       float   0..1
+        cost_margin      float   runner-up minus best normalized path cost
+                                 (0 when only one candidate was evaluated)
         search_lo_t      float   bounds used
         search_hi_t      float
         dtw_ref_lo_idx   int     reference slice used for DTW
@@ -171,33 +212,51 @@ def align(
 
     # --- Step 1: coarse cosine search ---
     latest_live = live_buffer[-1]  # most recent embedding
-    candidate_idx, sim = similarity_search(latest_live, ref_embs, lo_idx, hi_idx)
-    candidate_t = float(ref_timestamps[candidate_idx])
-
-    # --- Step 2: DTW refinement ---
-    ctx_frames = max(len(live_buffer), int(dtw_context_sec / stride_sec))
-    dtw_lo = max(0, candidate_idx - ctx_frames)
-    dtw_hi = min(len(ref_embs), candidate_idx + ctx_frames)
-
-    ref_window = ref_embs[dtw_lo:dtw_hi]    # [N_ctx, D]
-
-    if len(ref_window) >= len(live_buffer) and len(live_buffer) > 0:
-        end_rel, path_cost, confidence = subsequence_dtw(
-            live_buffer, ref_window, band_ratio=band_ratio
-        )
-        refined_idx = dtw_lo + end_rel
-        refined_t = float(ref_timestamps[min(refined_idx, len(ref_timestamps) - 1)])
+    if top_k > 1:
+        min_sep = max(1, int(cand_min_sep_sec / stride_sec))
+        candidates = topk_candidates(latest_live, ref_embs, lo_idx, hi_idx,
+                                     k=top_k, min_sep=min_sep)
     else:
-        # Fallback: trust coarse search if window too small
-        refined_t = candidate_t
-        path_cost = float("inf")
-        confidence = float(np.clip(sim, 0.0, 1.0))
+        candidate_idx, _sim = similarity_search(latest_live, ref_embs, lo_idx, hi_idx)
+        candidates = [candidate_idx]
+
+    # --- Step 2: DTW refinement per candidate, lowest path cost wins ---
+    ctx_frames = max(len(live_buffer), int(dtw_context_sec / stride_sec))
+    results = []  # (norm_cost, refined_t, path_cost, confidence, dtw_lo, dtw_hi, cand_t)
+    for cand_idx in candidates:
+        dtw_lo = max(0, cand_idx - ctx_frames)
+        dtw_hi = min(len(ref_embs), cand_idx + ctx_frames)
+        ref_window = ref_embs[dtw_lo:dtw_hi]    # [N_ctx, D]
+
+        if len(ref_window) >= len(live_buffer) and len(live_buffer) > 0:
+            end_rel, path_cost, confidence = subsequence_dtw(
+                live_buffer, ref_window, band_ratio=band_ratio
+            )
+            refined_idx = dtw_lo + end_rel
+            refined_t = float(ref_timestamps[min(refined_idx, len(ref_timestamps) - 1)])
+            norm_cost = path_cost / max(len(live_buffer), 1)
+        else:
+            # Fallback: trust coarse search if window too small
+            refined_t = float(ref_timestamps[cand_idx])
+            path_cost = float("inf")
+            sims_here = float(ref_embs[cand_idx] @ latest_live)
+            confidence = float(np.clip(sims_here, 0.0, 1.0))
+            norm_cost = float("inf")
+        results.append((norm_cost, refined_t, path_cost, confidence,
+                        dtw_lo, dtw_hi, float(ref_timestamps[cand_idx])))
+
+    results.sort(key=lambda r: r[0])
+    norm_cost, refined_t, path_cost, confidence, dtw_lo, dtw_hi, candidate_t = results[0]
+    cost_margin = (results[1][0] - norm_cost) if len(results) > 1 else 0.0
+    if not np.isfinite(cost_margin):
+        cost_margin = 0.0
 
     return {
         "candidate_t": candidate_t,
         "refined_t": refined_t,
         "path_cost": path_cost,
         "confidence": confidence,
+        "cost_margin": float(cost_margin),
         "search_lo_t": float(ref_timestamps[lo_idx]) if lo_idx < len(ref_timestamps) else search_lo_t,
         "search_hi_t": float(ref_timestamps[hi_idx - 1]) if hi_idx - 1 < len(ref_timestamps) else search_hi_t,
         "dtw_ref_lo_idx": dtw_lo,

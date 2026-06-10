@@ -5,14 +5,14 @@ the musical boundary, accounting for display latency.  Gates on an HMM
 trigger-confidence threshold to prevent false positives.
 
 Two output modes:
-  - ProPresenter (``pp_base_url`` set): GET
-    ``/v1/presentation/{uuid}/{pp_slide_index}/trigger`` (or
-    ``.../presentation/active/...`` when no uuid is known) — the official
-    ProPresenter 7 REST API, same endpoints as the propresenter-client lib.
+  - ProPresenter (``pp_controller`` set): drives slides through a
+    ``propresenter_client.ProPresenterController`` — ``go_to_slide(n)``
+    (1-indexed) against the ACTIVE presentation, the same proven call path
+    the ../propresenter-speech project uses in production.
   - Legacy (default): POST a JSON payload to ``rest_url``.
 
-HTTP requests run on a daemon thread: a slow presentation host must never
-stall the 200ms real-time audio loop.
+Requests run on a daemon thread: a slow presentation host must never stall
+the 200ms real-time audio loop.
 """
 
 from __future__ import annotations
@@ -42,16 +42,14 @@ class TriggerScheduler:
         confidence_min: float = TRIGGER_CONFIDENCE_MIN,
         rest_timeout_sec: float = REST_TIMEOUT_SEC,
         dry_run: bool = False,
-        pp_base_url: str | None = None,
-        pp_uuid: str | None = None,
+        pp_controller=None,
     ) -> None:
         self.rest_url = rest_url
         self.buffer_sec = buffer_ms / 1000.0
         self.confidence_min = confidence_min
         self.rest_timeout_sec = rest_timeout_sec
         self.dry_run = dry_run
-        self.pp_base_url = pp_base_url.rstrip("/") if pp_base_url else None
-        self.pp_uuid = pp_uuid or None
+        self.pp_controller = pp_controller
 
         self._last_triggered_idx: int = -1
         self._last_trigger_wall_t: float = 0.0
@@ -123,11 +121,6 @@ class TriggerScheduler:
         self._last_triggered_idx = -1
         self._last_trigger_wall_t = 0.0
 
-    def _pp_trigger_url(self, pp_slide_index: int) -> str:
-        """ProPresenter REST URL that shows slide *pp_slide_index* (0-based)."""
-        target = self.pp_uuid if self.pp_uuid else "active"
-        return f"{self.pp_base_url}/v1/presentation/{target}/{pp_slide_index}/trigger"
-
     def _fire(
         self,
         slide_idx: int,
@@ -137,13 +130,14 @@ class TriggerScheduler:
         boundary_t: float,
         pp_slide_index: int | None = None,
     ) -> None:
-        if self.pp_base_url is not None and pp_slide_index is not None:
-            url = self._pp_trigger_url(pp_slide_index)
+        if self.pp_controller is not None and pp_slide_index is not None:
             if self.dry_run:
-                print(f"[TRIGGER dry-run] {slide_id}  →  GET {url}")
+                print(f"[TRIGGER dry-run] {slide_id}  →  "
+                      f"go_to_slide({pp_slide_index + 1})")
                 return
             threading.Thread(
-                target=self._send_pp, args=(url, slide_id, boundary_t, confidence),
+                target=self._send_pp,
+                args=(pp_slide_index, slide_id, boundary_t, confidence),
                 daemon=True,
             ).start()
             return
@@ -163,13 +157,16 @@ class TriggerScheduler:
             daemon=True,
         ).start()
 
-    def _send_pp(self, url: str, slide_id: str, boundary_t: float, confidence: float) -> None:
+    def _send_pp(self, pp_slide_index: int, slide_id: str,
+                 boundary_t: float, confidence: float) -> None:
         try:
-            resp = requests.get(url, timeout=self.rest_timeout_sec)
+            # go_to_slide is 1-indexed (propresenter-client convention).
+            ok = self.pp_controller.go_to_slide(pp_slide_index + 1)
             print(f"[TRIGGER] slide={slide_id!r}  t={boundary_t:.2f}s  "
-                  f"conf={confidence:.2f}  → HTTP {resp.status_code}  {url}")
-        except requests.RequestException as exc:
-            print(f"[TRIGGER error] {url}: {exc}")
+                  f"conf={confidence:.2f}  → go_to_slide({pp_slide_index + 1}) "
+                  f"{'ok' if ok else 'FAILED'}")
+        except Exception as exc:  # client raises requests exceptions internally
+            print(f"[TRIGGER error] go_to_slide({pp_slide_index + 1}): {exc}")
 
     def _send_legacy(self, payload: dict, slide_id: str, boundary_t: float,
                      confidence: float) -> None:

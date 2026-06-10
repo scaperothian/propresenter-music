@@ -25,9 +25,21 @@ SILENCE_RMS_DBFS = -50.0    # skip alignment when lookback RMS is below this
 # ---------------------------------------------------------------------------
 # Subsequence DTW
 # ---------------------------------------------------------------------------
-DTW_LIVE_SEC = 4.0          # live buffer duration fed to DTW comparison
+DTW_LIVE_SEC = 6.0          # live buffer capacity fed to DTW comparison
+DTW_MIN_LIVE_SEC = 4.0      # minimum buffer fill before DTW runs (warm-up gate)
 DTW_SEARCH_SEC = 45.0       # forward search window in reference audio
 DTW_BAND_RATIO = 0.1        # Sakoe-Chiba band as fraction of query length
+
+# ---------------------------------------------------------------------------
+# Initial lock & jump guard (repeat-ambiguity defenses)
+# ---------------------------------------------------------------------------
+INIT_TOP_K = 5              # cosine candidates DTW-refined during initial lock
+INIT_CAND_SEP_SEC = 8.0     # min separation between those candidates
+INIT_CONSISTENT_FRAMES = 3  # consecutive confident frames required to lock
+INIT_AGREE_SEC = 3.0        # ...all within this span of each other
+JUMP_GUARD_SEC = 5.0        # forward jumps larger than this need confirmation
+JUMP_CONFIRM_FRAMES = 3     # consecutive agreeing frames to accept a big jump
+JUMP_AGREE_SEC = 2.5        # agreement tolerance for those frames
 
 # ---------------------------------------------------------------------------
 # HMM predictor

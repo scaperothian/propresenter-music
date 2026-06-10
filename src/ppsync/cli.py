@@ -130,12 +130,17 @@ def _align_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--pp-host", default=None, metavar="HOST",
-        help="ProPresenter host — enables real ProPresenter REST triggering "
-             "(GET /v1/presentation/{uuid|active}/{slide}/trigger).",
+        help="ProPresenter host — triggers slides via propresenter-client "
+             "go_to_slide() against the active presentation.",
     )
     p.add_argument(
         "--pp-port", type=int, default=1025, metavar="PORT",
         help="ProPresenter API port (default: 1025).",
+    )
+    p.add_argument(
+        "--pp-activate", action="store_true",
+        help="Activate the cache's presentation in ProPresenter at startup "
+             "if it is not already the active one.",
     )
     p.add_argument(
         "--trigger-buffer", type=float, default=TRIGGER_BUFFER_MS, metavar="MS",
@@ -209,9 +214,16 @@ def align_main(argv: list[str] | None = None) -> None:
     processor, model = load_model(device)
 
     cache_path = Path(args.cache)
-    pp_url = f"http://{args.pp_host}:{args.pp_port}" if args.pp_host else None
-    if pp_url:
-        print(f"ProPresenter triggering → {pp_url}")
+    pp_controller = None
+    if args.pp_host:
+        from propresenter_client.main import ProPresenterController
+
+        pp_controller = ProPresenterController(host=args.pp_host, port=args.pp_port)
+        if pp_controller.get_status() is None:
+            print(f"Error: cannot reach ProPresenter at "
+                  f"{args.pp_host}:{args.pp_port} — is the network API enabled?")
+            sys.exit(1)
+        print(f"ProPresenter connected at {args.pp_host}:{args.pp_port}")
 
     aligner = SongAligner(
         cache_path=cache_path,
@@ -219,7 +231,7 @@ def align_main(argv: list[str] | None = None) -> None:
         processor=processor,
         device=device,
         rest_url=args.rest_url,
-        pp_url=pp_url,
+        pp_controller=pp_controller,
         trigger_buffer_ms=args.trigger_buffer,
         trigger_conf_min=args.trigger_conf,
         dry_run=args.dry_run,
@@ -227,6 +239,22 @@ def align_main(argv: list[str] | None = None) -> None:
         dtw_search_sec=args.dtw_search,
         chunk_sec=args.chunk,
     )
+
+    # The trigger drives the ACTIVE presentation (go_to_slide), so make sure
+    # the right one is focused — slide indices are meaningless otherwise.
+    if pp_controller is not None and aligner.pp_uuid:
+        active_uuid = pp_controller.get_active_presentation_uuid()
+        if active_uuid != aligner.pp_uuid:
+            if args.pp_activate:
+                print(f"Activating presentation {aligner.pp_uuid}…")
+                if not pp_controller.activate_presentation(aligner.pp_uuid):
+                    print("Error: could not activate the presentation.")
+                    sys.exit(1)
+            else:
+                print(f"WARNING: active presentation is {active_uuid}, but this "
+                      f"cache belongs to {aligner.pp_uuid}.\n"
+                      f"         Triggers would hit the wrong slides — focus the "
+                      f"right presentation or pass --pp-activate.")
 
     if args.mic:
         input_dev = args.input_device

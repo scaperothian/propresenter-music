@@ -138,10 +138,14 @@ an open mic before the song starts could otherwise walk into a boundary.
 chronological *trigger events* (a chorus shown 3× = 3 instances), but the
 ProPresenter REST API addresses slides by their position in the presentation.
 `pp_to_manifest.py` records `pp_slide_index` per instance (repeats share one)
-and the presentation `pp_uuid`; both ride through the cache, and the trigger
-fires `GET /v1/presentation/{uuid}/{pp_slide_index}/trigger` (`active` when no
-uuid).  Trigger HTTP runs on a daemon thread — a slow ProPresenter must not
-stall the 200ms audio loop.  Enable with `--pp-host` (else legacy POST).
+and the presentation `pp_uuid`; both ride through the cache.  Triggering goes
+through `propresenter-client`'s `ProPresenterController.go_to_slide(n)`
+(1-indexed, ACTIVE presentation — the call path proven in
+`../propresenter-speech`); the CLI verifies the active presentation's uuid
+against the cache at startup and `--pp-activate` switches to it.  Trigger
+requests run on a daemon thread — a slow ProPresenter must not stall the
+200ms audio loop.  Enable with `--pp-host`; closed-loop integration test:
+`tools/pp_trigger_test.py`.
 
 **No Sakoe-Chiba band in `subsequence_dtw`.**  A band of `|i - j| <= k` is wrong for subsequence DTW because the optimal path is offset by the match position, not near (0,0).  The reference window passed by `align()` is already narrow (±`dtw_context_sec` around the candidate), which limits the search space without breaking correctness.
 
@@ -150,6 +154,19 @@ stall the 200ms audio loop.  Enable with `--pp-host` (else legacy POST).
 **HMM transition step mismatch (known, tolerated).**  The transition matrix is built for `stride_sec` steps but `hmm.update()` runs once per 200ms chunk, so the transition prior advances slower than real time.  With confident DTW observations the emission dominates and this barely matters; it is why the HMM alone cannot drive timely triggers (see trigger note above).  Fix by rebuilding A for the chunk interval if the HMM ever needs to free-run through long low-confidence gaps.
 
 **Search window anchoring.**  Once `dtw_confidence >= CONFIDENCE_THRESHOLD`, the lower bound of the cosine search window advances to `refined_t - 2s`.  This prevents backward regression but allows the search to slip back 2s to absorb timing variation.
+
+**Initial lock and jump guard (repeat ambiguity).**  Riff-based songs make the
+single best 2s cosine match unreliable — verse/outro/chorus repeats are
+near-identical, and one wrong confident frame would ratchet the anchor to the
+wrong repeat (observed live: lock onto the outro → slide 14 fires).  Defenses
+(`config.py` INIT_*/JUMP_*): before the anchor exists, the cosine search
+returns top-K separated candidates and DTW-refines each (lowest path cost
+wins), and locking requires `INIT_CONSISTENT_FRAMES` consecutive confident
+frames agreeing within `INIT_AGREE_SEC`; after lock, a forward jump larger
+than `JUMP_GUARD_SEC` needs `JUMP_CONFIRM_FRAMES` agreeing frames before the
+anchor, HMM, or trigger see it.  Triggers never fire pre-lock.  The DTW query
+buffer holds `DTW_LIVE_SEC=6s` but starts matching at `DTW_MIN_LIVE_SEC=4s`,
+so warm-up stays ~6s while the steady-state query is richer.
 
 **Cold start.**  HMM starts with a uniform prior.  After the first coarse MERT match exceeds threshold, `set_prior_from_coarse()` concentrates belief on the detected slide; then DTW+HMM take over.
 
