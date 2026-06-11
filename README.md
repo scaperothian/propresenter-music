@@ -1,6 +1,7 @@
-# ppsync
+# propresenter-music
 
 Real-time music alignment for live ProPresenter slide advancement.
+(Python package and CLI prefix: `ppsync`.)
 
 Given a studio reference recording and a slide manifest (slide IDs + timestamps), `ppsync` listens to live audio (microphone or house feed), tracks where the song is, and advances ProPresenter slides at the right moments via its REST API — even when playback starts mid-song, and through PA/room/mic coloration.
 

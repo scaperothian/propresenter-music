@@ -1,4 +1,4 @@
-# CLAUDE.md — ppsync
+# CLAUDE.md — propresenter-music (package: ppsync)
 
 Real-time music alignment: MERT embeddings → rigid/DTW matcher → HMM → scheduled ProPresenter trigger.
 
@@ -155,9 +155,8 @@ ProPresenter REST API addresses slides by their position in the presentation.
 `pp_to_manifest.py` records `pp_slide_index` per instance (repeats share one)
 and the presentation `pp_uuid`; both ride through the cache.  Triggering goes
 through `propresenter-client`'s `ProPresenterController.go_to_slide(n)`
-(1-indexed, ACTIVE presentation — the call path proven in
-`../propresenter-speech`); the CLI verifies the active presentation's uuid
-against the cache at startup and `--pp-activate` switches to it.  Trigger
+(1-indexed, ACTIVE presentation); the CLI verifies the active presentation's
+uuid against the cache at startup and `--pp-activate` switches to it.  Trigger
 requests run on a daemon thread — a slow ProPresenter must not stall the
 200ms audio loop.  Enable with `--pp-host`; closed-loop integration test:
 `tools/pp_trigger_test.py`.

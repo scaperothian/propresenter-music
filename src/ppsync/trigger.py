@@ -7,8 +7,7 @@ trigger-confidence threshold to prevent false positives.
 Two output modes:
   - ProPresenter (``pp_controller`` set): drives slides through a
     ``propresenter_client.ProPresenterController`` — ``go_to_slide(n)``
-    (1-indexed) against the ACTIVE presentation, the same proven call path
-    the ../propresenter-speech project uses in production.
+    (1-indexed) against the ACTIVE presentation.
   - Legacy (default): POST a JSON payload to ``rest_url``.
 
 Requests run on a daemon thread: a slow presentation host must never stall
