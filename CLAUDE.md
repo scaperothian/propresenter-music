@@ -2,6 +2,15 @@
 
 Real-time music alignment: MERT embeddings → rigid/DTW matcher → HMM → scheduled ProPresenter trigger.
 
+## Workflow
+
+**Never commit directly to `main`.**  All changes go on a feature branch and
+land via a GitHub pull request (`gh pr create` against
+`scaperothian/propresenter-music`).  Branch from up-to-date `main`, push the
+branch, open the PR, and merge only after review.  Tags like `v0.1.0` mark
+regression baselines — see the tag annotation for verified benchmark numbers
+and the repro command.
+
 ## Commands
 
 ```bash
