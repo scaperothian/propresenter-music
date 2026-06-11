@@ -8,7 +8,7 @@ Real-time music alignment: MERT embeddings → rigid/DTW matcher → HMM → sch
 # Install
 python3.11 -m venv .venv && .venv/bin/pip install -e .
 
-# Tests (no model download, ~1s)
+# Tests (no model download, ~5s)
 .venv/bin/pytest
 .venv/bin/pytest -v
 

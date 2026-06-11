@@ -31,7 +31,7 @@ LIVE (per 200ms chunk)
            drives ProPresenter via propresenter-client go_to_slide()
 ```
 
-Measured on the Drive test set (studio reference, EQ'd/attenuated "mic-proxy" replay): lock-on ~5.6s after music is audible from any start offset, 14/14 slides fired at −400ms ±5ms from their boundaries, tracking error 0.20s median, ~170ms processing per 200ms chunk on Apple Silicon.
+Measured on the Drive test set (studio reference, EQ'd/attenuated "mic-proxy" replay): lock-on ~5.6s after music is audible from any start offset, 14/14 slides fired at −400ms ±5ms from their boundaries, tracking error 0.20s median, ~85ms mean (107ms max) processing per 200ms chunk on Apple Silicon.
 
 ## Requirements
 
