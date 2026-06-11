@@ -1,6 +1,6 @@
 # CLAUDE.md — ppsync
 
-Real-time music alignment: MERT embeddings → subsequence DTW → HMM → REST trigger.
+Real-time music alignment: MERT embeddings → rigid/DTW matcher → HMM → scheduled ProPresenter trigger.
 
 ## Commands
 
@@ -34,12 +34,20 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 
 # Live mic -> ProPresenter (REST API, default port 1025)
 .venv/bin/ppsync-align data/studio_cache_sliding.npz --mic \
-    --pp-host localhost [--pp-port 1025] [--log /tmp/ppsync.jsonl]
+    --pp-host localhost [--pp-activate] [--trigger-buffer 0] \
+    [--log /tmp/ppsync.jsonl]
+
+# Live monitor web UI (tails the --log file; see webapp/README.md)
+.venv/bin/python webapp/server.py --log /tmp/ppsync.jsonl   # localhost:8765
 
 # Start-offset re-sync benchmark (file-based, no mic; see tools/benchmark.py)
 .venv/bin/python tools/benchmark.py data/studio_cache_sliding.npz \
     --file <song>.wav --manifest <song>_manifest.json \
-    --offsets 0,30,64.1,95 [--duration 30] [--trace-out /tmp/trace.json]
+    --offsets 0,30,64.1,95 [--duration 30] [--matcher dtw|rigid] \
+    [--trace-out /tmp/trace.json]
+
+# Closed-loop ProPresenter trigger test (changes slides, restores after)
+.venv/bin/python tools/pp_trigger_test.py data/studio_manifest.json
 ```
 
 ## Package layout
@@ -48,15 +56,15 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 |---|---|
 | `config.py` | All tunable constants — change defaults here |
 | `io.py` | `load_manifest`, `load_audio`, `finalize_slide_stops` |
-| `embed.py` | `load_model`, `embed_audio` (offline full song), `embed_chunk_live` (streaming) |
+| `embed.py` | `load_model` (layer-truncated, fp16), `embed_audio`, `embed_chunk_live`, `prep_inputs` |
 | `windows.py` | `strided_window_embeddings`, `pool_slide_embeddings` |
 | `transform.py` | `fit_global`, `apply_contrastive` (subtract global + L2-norm) |
-| `preprocess.py` | `preprocess_song`, `load_cache`, `build_hmm_transition` |
-| `dtw.py` | `cosine_distance_matrix`, `subsequence_dtw`, `similarity_search`, `align` |
+| `preprocess.py` | `preprocess_song`, `sliding_window_embeddings`, `load_cache`, `build_hmm_transition` |
+| `dtw.py` | `rigid_align` (default matcher), `subsequence_dtw`, `align`, `topk_candidates`, `similarity_search` |
 | `hmm.py` | `HMMPredictor` — online forward filter |
-| `audio_capture.py` | `MicCapture`, `FileCapture` |
-| `aligner.py` | `SongAligner` — wires all three layers together |
-| `trigger.py` | `TriggerScheduler` |
+| `audio_capture.py` | `MicCapture` (native rate, drain), `FileCapture` |
+| `aligner.py` | `SongAligner`, `select_trigger_boundary` |
+| `trigger.py` | `TriggerScheduler` — scheduled (timer-based) fires, ProPresenter mode |
 | `telemetry.py` | `TelemetryLogger` |
 | `cli.py` | `preprocess_main`, `align_main`, `eval_main` |
 
@@ -85,16 +93,23 @@ Live (per 200ms chunk):
 
   cosine(pooled_norm, slide_protos) → coarse_slide_idx, coarse_conf
 
-  dtw.align(live_buffer, ref_embs, ref_timestamps, search_bounds)
-    → Step 1: similarity_search → candidate_t
-    → Step 2: subsequence_dtw  → refined_t, path_cost, confidence
+  matcher (MATCHER config / --matcher):
+    rigid_align — 1:1 time mapping, mean cosine per offset  (default)
+    align       — top-K cosine candidates + subsequence DTW (live-band)
+    → refined_t, confidence, cost_margin
 
-  HMMPredictor.update(refined_t, dtw_confidence, coarse_slide_idx)
-    → current_slide, state_probs, predicted_next_t, trigger_confidence
+  anchor logic: initial lock (consistency + cost margin) / jump guard
+    → obs_accepted, confirmed_t, search window
 
-  pos_t = refined_t if DTW confident else HMM expected_pos_t
-  first unfired boundary vs pos_t (± grace) → TriggerScheduler.update(...)
-    → HTTP POST when pos_t crosses t_ref - buffer
+  HMMPredictor.update(refined_t, conf if obs_accepted else 0, coarse_idx)
+    → current_slide, expected_pos_t, trigger_confidence  (fallback position)
+
+  pos_t = refined_t if obs_accepted else HMM expected_pos_t
+  select_trigger_boundary(pos_t) → catch-up / next boundary
+  TriggerScheduler.update(...)
+    → fire now if pos_t past (t_ref - buffer), else arm a timer at the
+      predicted crossing (re-armed per estimate; go_to_slide / POST on
+      a daemon thread)
 ```
 
 ## Non-obvious design decisions
@@ -147,6 +162,16 @@ requests run on a daemon thread — a slow ProPresenter must not stall the
 200ms audio loop.  Enable with `--pp-host`; closed-loop integration test:
 `tools/pp_trigger_test.py`.
 
+**Rigid matcher is the default; DTW is for the live-band mode.**  Playback of
+a fixed recording does not warp time — only the acoustic channel differs — so
+the matcher slides the live query across the reference with the time mapping
+FIXED at 1:1 (`dtw.rigid_align`, `MATCHER="rigid"`, benchmark `--matcher`).
+DTW's path flexibility absorbs acoustic mismatch by bending time, which shows
+up as 0.5-1s position lag and wrong-repeat jumps under mic/PA coloration;
+rigid matching made colored-audio results identical to clean-studio results
+(14/14 fires at −400ms ±5ms, tracking 0.20s).  Keep DTW for genuinely
+tempo-variable sources (live band).
+
 **No Sakoe-Chiba band in `subsequence_dtw`.**  A band of `|i - j| <= k` is wrong for subsequence DTW because the optimal path is offset by the match position, not near (0,0).  The reference window passed by `align()` is already narrow (±`dtw_context_sec` around the candidate), which limits the search space without breaking correctness.
 
 **Contrastive normalization, not ZCA.**  `apply_contrastive` subtracts the song-level mean then L2-normalizes.  This removes the dominant "sounds like music" direction that makes all sections score ~0.9 cosine similarity.  ZCA from `mert-experiment` is more powerful but expensive; add it if per-slide similarity remains too high.
@@ -180,14 +205,30 @@ every frame's nearest neighbour (observed live AND on EQ'd test audio).
 Trade-off: during the first ~20s the mean is immature and fires can lag ~1-2s
 even on clean audio; colored-audio recall goes 0.00 → 0.85.
 
-**Cold start.**  HMM starts with a uniform prior.  After the first coarse MERT match exceeds threshold, `set_prior_from_coarse()` concentrates belief on the detected slide; then DTW+HMM take over.
+**Scheduled (timer-based) trigger fires.**  Position estimates arrive once
+per chunk and ~processing-latency late, so waiting to OBSERVE a boundary
+crossing fires ~100ms late on average plus the processing delay.  When a
+crossing is predicted within `schedule_horizon_sec`, the scheduler arms a
+`threading.Timer` at the exact predicted wall moment (playback rate is 1.0);
+each newer estimate re-arms it, and a confidence drop cancels it.  The
+offline benchmark can't use wall timers (it replays faster than real time),
+so `wall_timers=False` releases pending fires at their wall deadline in
+file-time — including any estimate lag, so the benchmark cannot flatter
+itself (regression-tested).
+
+**Cold start.**  The HMM starts uniform; nothing trusts position until the
+initial lock (consistency + cost margin) succeeds, at which point
+`set_prior_from_coarse()` seeds the HMM at the locked slide and the catch-up
+trigger shows the current slide immediately.
 
 ## Test coverage
 
 | File | What it covers |
 |---|---|
-| `test_dtw.py` | cosine distance, subsequence DTW (identical subsequence, confidence, empty), similarity search bounds, full `align()` return keys |
+| `test_dtw.py` | cosine distance, subsequence DTW, similarity search bounds, `align()` keys, `rigid_align` (exact subsequence, empty window) |
 | `test_hmm.py` | transition matrix (row sums, left-to-right, absorbing last state), `update()` keys, state probs sum to 1, convergence, drift, reset, trigger confidence near boundary |
 | `test_io.py` | manifest parsing (stops inferred, finalize, empty raises), audio resampling and stereo→mono |
 | `test_transform.py` | global mean, L2 norm after contrastive, single vector, zero-out identical rows |
 | `test_windows.py` | window count, timestamps monotone, short audio → empty, pool range, pool empty range |
+| `test_trigger.py` | fire gating/ordering/cooldown, skip pointer, ProPresenter index mapping via fake controller, boundary selection (catch-up/skips), scheduled fires (virtual + wall timers, re-arm, cancel-on-low-confidence, lag honesty) |
+| `test_pp_live.py` | live ProPresenter integration (auto-skips when unreachable): go_to_slide round-trip, TriggerScheduler→controller delivery |

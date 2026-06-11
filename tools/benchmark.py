@@ -112,7 +112,9 @@ def run_offset(
         if lock_on_t is None and abs(dtw_err) <= 1.0:
             lock_on_t = song_t
         if frame["triggered"]:
-            triggers.append({"slide_id": frame["triggered_slide_id"], "fire_t": song_t})
+            fire_t = frame.get("trigger_fire_t")
+            triggers.append({"slide_id": frame["triggered_slide_id"],
+                             "fire_t": fire_t if fire_t is not None else song_t})
         if trace_path is not None:
             frame["true_t"] = round(song_t, 3)
             trace.append(frame)
@@ -235,6 +237,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--warmup-sec", type=float, default=LOOKBACK_SEC + DTW_LIVE_SEC,
                    help="Cold-start window after offset; boundaries inside it are unscored.")
     p.add_argument("--device", default=None)
+    p.add_argument("--matcher", default=None, choices=("dtw", "rigid"),
+                   help="Sequence matcher (default: config.MATCHER).")
     p.add_argument("--json-out", default=None, help="Write raw per-offset results to JSON.")
     p.add_argument("--trace-out", default=None,
                    help="Write per-frame telemetry JSON (suffixed per offset).")
@@ -259,10 +263,17 @@ def main(argv: list[str] | None = None) -> None:
     device = _pick_device(args.device)
     print(f"Loading MERT on {device}…")
     processor, model = load_model(device)
+    from ppsync.config import MATCHER
+
     aligner = SongAligner(
         cache_path=Path(args.cache),
         model=model, processor=processor, device=device, dry_run=True,
+        # Replay runs faster than real time — scheduled fires are released in
+        # virtual (song) time rather than by wall-clock timers.
+        wall_timers=False,
+        matcher=args.matcher or MATCHER,
     )
+    print(f"matcher: {aligner.matcher}")
 
     print(f"\nBenchmark: {Path(args.file).name}  "
           f"({len(gt)} boundaries, window={args.window_ms:.0f}ms, "

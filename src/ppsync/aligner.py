@@ -51,6 +51,7 @@ from .config import (
     JUMP_MIN_COST_MARGIN,
     LIVE_MEAN_ADAPT_SEC,
     LOOKBACK_SEC,
+    MATCHER,
     MERT_FP16,
     MERT_FRAME_RATE,
     MERT_LAYER,
@@ -60,6 +61,7 @@ from .config import (
     TRIGGER_CONFIDENCE_MIN,
 )
 from .dtw import align as dtw_align
+from .dtw import rigid_align
 from .embed import embed_chunk_live
 from .hmm import HMMPredictor
 from .preprocess import load_cache
@@ -118,6 +120,8 @@ class SongAligner:
         dtw_live_sec: float = DTW_LIVE_SEC,
         dtw_search_sec: float = DTW_SEARCH_SEC,
         chunk_sec: float = CHUNK_SEC,
+        wall_timers: bool = True,
+        matcher: str = MATCHER,
     ) -> None:
         self.device = device
         self.model = model
@@ -125,6 +129,7 @@ class SongAligner:
         self.chunk_sec = chunk_sec
         self.dtw_live_sec = dtw_live_sec
         self.dtw_search_sec = dtw_search_sec
+        self.matcher = matcher
 
         # Load cache
         cache = load_cache(cache_path)
@@ -174,6 +179,9 @@ class SongAligner:
             confidence_min=trigger_conf_min,
             dry_run=dry_run,
             pp_controller=pp_controller,
+            wall_timers=wall_timers,
+            # Crossings predicted within ~2.5 chunks get an exact-moment fire.
+            schedule_horizon_sec=chunk_sec * 2.5,
         )
 
         # Audio ring buffer spanning the lookback window.  The whole window is
@@ -247,10 +255,35 @@ class SongAligner:
         self._search_lo_t = max(0.0, refined_t - 2.0)
         self._search_hi_t = refined_t + self.dtw_search_sec
 
-    def _jump_beats_local(self, live_buffer: np.ndarray, jump_result: dict,
-                          dtw_ctx_sec: float) -> bool:
+    def _match(self, live_buffer: np.ndarray, search_lo_t: float,
+               search_hi_t: float, top_k: int) -> dict:
+        """Run the configured matcher over [search_lo_t, search_hi_t]."""
+        if self.matcher == "rigid":
+            return rigid_align(
+                live_buffer=live_buffer,
+                ref_embs=self.ref_embs,
+                ref_timestamps=self.ref_timestamps,
+                search_lo_t=search_lo_t,
+                search_hi_t=search_hi_t,
+                live_step=max(1, round(self.chunk_sec / self.stride_sec)),
+                top_k=top_k,
+                cand_min_sep_sec=INIT_CAND_SEP_SEC,
+            )
+        return dtw_align(
+            live_buffer=live_buffer,
+            ref_embs=self.ref_embs,
+            ref_timestamps=self.ref_timestamps,
+            search_lo_t=search_lo_t,
+            search_hi_t=search_hi_t,
+            dtw_context_sec=max(self.dtw_live_sec * 2, 10.0),
+            band_ratio=0.1,
+            top_k=top_k,
+            cand_min_sep_sec=INIT_CAND_SEP_SEC,
+        )
+
+    def _jump_beats_local(self, live_buffer: np.ndarray, jump_result: dict) -> bool:
         """
-        True when the pending jump target's DTW cost beats a re-alignment
+        True when the pending jump target's match cost beats a re-alignment
         restricted to the neighbourhood of the current anchor by
         JUMP_MIN_COST_MARGIN (normalized per query frame).
 
@@ -261,13 +294,11 @@ class SongAligner:
         jump_cost = jump_result["path_cost"]
         if not np.isfinite(jump_cost):
             return False
-        local = dtw_align(
-            live_buffer=live_buffer,
-            ref_embs=self.ref_embs,
-            ref_timestamps=self.ref_timestamps,
-            search_lo_t=max(0.0, self._confirmed_t - 2.0),
-            search_hi_t=self._confirmed_t + JUMP_GUARD_SEC,
-            dtw_context_sec=dtw_ctx_sec,
+        local = self._match(
+            live_buffer,
+            max(0.0, self._confirmed_t - 2.0),
+            self._confirmed_t + JUMP_GUARD_SEC,
+            top_k=1,
         )
         if not np.isfinite(local["path_cost"]):
             return True  # no usable local hypothesis (e.g. song end)
@@ -342,22 +373,14 @@ class SongAligner:
         coarse_slide_idx = int(np.argmax(sims))
         coarse_confidence = float(sims[coarse_slide_idx])
 
-        # ---- Layer 2: Subsequence DTW ----------------------------------------
+        # ---- Layer 2: sequence matching (DTW or rigid) ------------------------
         live_buffer = _contrast(np.stack(list(self._dtw_emb_buffer)))  # [M, D]
-        dtw_ctx_sec = max(self.dtw_live_sec * 2, 10.0)
 
-        dtw_result = dtw_align(
-            live_buffer=live_buffer,
-            ref_embs=self.ref_embs,
-            ref_timestamps=self.ref_timestamps,
-            search_lo_t=self._search_lo_t,
-            search_hi_t=self._search_hi_t,
-            dtw_context_sec=dtw_ctx_sec,
-            band_ratio=0.1,
-            # Pre-lock the search is song-wide and repeats are ambiguous:
-            # DTW-refine several separated cosine candidates, best cost wins.
+        # Pre-lock the search is song-wide and repeats are ambiguous:
+        # refine several separated candidates, best cost wins.
+        dtw_result = self._match(
+            live_buffer, self._search_lo_t, self._search_hi_t,
             top_k=1 if self._initialized else INIT_TOP_K,
-            cand_min_sep_sec=INIT_CAND_SEP_SEC,
         )
         refined_t = dtw_result["refined_t"]
         dtw_confidence = dtw_result["confidence"]
@@ -397,7 +420,7 @@ class SongAligner:
                 self._jump_hist.append(refined_t)
                 if (len(self._jump_hist) == self._jump_hist.maxlen
                         and max(self._jump_hist) - min(self._jump_hist) <= JUMP_AGREE_SEC
-                        and self._jump_beats_local(live_buffer, dtw_result, dtw_ctx_sec)):
+                        and self._jump_beats_local(live_buffer, dtw_result)):
                     obs_accepted = True
                     self._advance_anchor(refined_t)
                     self._jump_hist.clear()
@@ -440,6 +463,12 @@ class SongAligner:
         # consume boundaries.
         triggered = False
         triggered_slide_id = None
+        trigger_fire_t = None
+        # Surface fires performed by scheduled timers since the last chunk.
+        for ev in self.trigger.drain_fired():
+            triggered = True
+            triggered_slide_id = ev["slide_id"]
+            trigger_fire_t = ev["fire_at_song_t"]
         boundary_idx = len(self.slide_ids)
         if self._initialized and pos_conf >= self.trigger.confidence_min:
             skips, boundary_idx = select_trigger_boundary(
@@ -448,7 +477,7 @@ class SongAligner:
             for k in skips:
                 self.trigger.mark_skipped(k)
         if boundary_idx < len(self.slide_ids):
-            triggered = self.trigger.update(
+            fired_now = self.trigger.update(
                 current_song_t=pos_t,
                 next_slide_idx=boundary_idx,
                 next_slide_t=float(self.slide_t_refs[boundary_idx]),
@@ -457,8 +486,18 @@ class SongAligner:
                 wall_time=chunk_wall_t,
                 pp_slide_index=int(self.slide_pp_indices[boundary_idx]),
             )
-            if triggered:
+            if fired_now:
+                triggered = True
                 triggered_slide_id = self.slide_ids[boundary_idx]
+                # No estimated fire time: the honest fire moment is "now"
+                # (benchmark scores the chunk's file time).
+            else:
+                # In virtual-time mode update() may have released a pending
+                # scheduled fire internally — pick it up.
+                for ev in self.trigger.drain_fired():
+                    triggered = True
+                    triggered_slide_id = ev["slide_id"]
+                    trigger_fire_t = ev["fire_at_song_t"]
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
         self._chunk_count += 1
@@ -491,6 +530,7 @@ class SongAligner:
             # Trigger
             "triggered": triggered,
             "triggered_slide_id": triggered_slide_id,
+            "trigger_fire_t": round(trigger_fire_t, 3) if trigger_fire_t is not None else None,
             # Perf
             "processing_ms": round(elapsed_ms, 1),
         }

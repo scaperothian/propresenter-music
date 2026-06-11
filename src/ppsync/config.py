@@ -26,6 +26,18 @@ SILENCE_RMS_DBFS = -50.0    # skip alignment when lookback RMS is below this
                             # still DTW-matches the song's quietest section)
 
 # ---------------------------------------------------------------------------
+# Matcher
+# ---------------------------------------------------------------------------
+MATCHER = "rigid"           # "rigid" — fixed 1:1 time mapping (linear playback
+                            #           of the reference recording; immune to
+                            #           DTW's warp-absorbs-mismatch lag).
+                            # "dtw"   — subsequence DTW (handles tempo warps;
+                            #           live-band scenario).
+                            # A/B on EQ'd mic-proxy audio: rigid 14/14 fires
+                            # at -400ms +-5ms, tracking 0.20s; DTW 9/14 with
+                            # +0.2..+2.3s drift.
+
+# ---------------------------------------------------------------------------
 # Subsequence DTW
 # ---------------------------------------------------------------------------
 DTW_LIVE_SEC = 6.0          # live buffer capacity fed to DTW comparison

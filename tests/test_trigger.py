@@ -1,5 +1,7 @@
 """TriggerScheduler: gating, ordering, and ProPresenter URL construction."""
 
+import pytest
+
 import ppsync.trigger as trigger_mod
 from ppsync.trigger import TriggerScheduler
 
@@ -137,3 +139,82 @@ def test_position_behind_already_fired_aims_forward():
     skips, boundary = select_trigger_boundary(5, T_REFS, 70.0)
     assert skips == []
     assert boundary == 6
+
+
+# ---------------------------------------------------------------------------
+# Scheduled (timer-based) firing
+# ---------------------------------------------------------------------------
+
+def test_virtual_mode_fires_at_exact_scheduled_time():
+    """Crossing predicted between updates fires at the timer deadline.
+
+    In virtual mode wall_time IS file time (the benchmark clock).  With an
+    unbiased estimate (pos == file time) the deadline lands at boundary -
+    buffer; with a lagging estimate the deadline lags equally — modelling
+    the live wall timer honestly.
+    """
+    t = TriggerScheduler(dry_run=True, wall_timers=False, schedule_horizon_sec=0.5)
+    # boundary 10.0, buffer 0.2 -> fire_at 9.8; pos 9.7 at file time 9.7
+    assert not t.update(**_fire_kwargs(current_song_t=9.7, next_slide_t=10.0,
+                                       wall_time=9.7))
+    assert t.last_triggered_idx == -1
+    # next update at file time 9.9 releases the pending fire scheduled at 9.8
+    assert not t.update(**_fire_kwargs(current_song_t=9.9, next_slide_t=10.0,
+                                       wall_time=9.9))
+    fired = t.drain_fired()
+    assert len(fired) == 1
+    assert fired[0]["fire_at_song_t"] == pytest.approx(9.8)
+    assert t.last_triggered_idx == 1
+
+
+def test_virtual_mode_lagging_estimate_fires_late_by_the_lag():
+    """A 0.5s-lagging estimate arms the timer 0.5s late — the recorded fire
+    time must show that lag, not mask it."""
+    t = TriggerScheduler(dry_run=True, wall_timers=False, schedule_horizon_sec=0.5)
+    # file time 10.2 but estimate says 9.7 (0.5s lag): eta 0.1 -> deadline 10.3
+    assert not t.update(**_fire_kwargs(current_song_t=9.7, next_slide_t=10.0,
+                                       wall_time=10.2))
+    assert not t.update(**_fire_kwargs(current_song_t=9.9, next_slide_t=10.0,
+                                       wall_time=10.4))
+    fired = t.drain_fired()
+    assert len(fired) == 1
+    assert fired[0]["fire_at_song_t"] == pytest.approx(10.3)  # 9.8 + 0.5 lag
+
+
+def test_virtual_mode_pending_cancelled_when_confidence_drops():
+    t = TriggerScheduler(dry_run=True, wall_timers=False, schedule_horizon_sec=0.5)
+    assert not t.update(**_fire_kwargs(current_song_t=9.7, next_slide_t=10.0,
+                                       wall_time=100.0))
+    # estimate goes unconfident before the crossing: pending must be dropped
+    assert not t.update(**_fire_kwargs(current_song_t=9.75, next_slide_t=10.0,
+                                       trigger_confidence=0.1, wall_time=100.05))
+    assert not t.update(**_fire_kwargs(current_song_t=9.78, next_slide_t=10.0,
+                                       trigger_confidence=0.1, wall_time=100.08))
+    assert t.drain_fired() == []
+    assert t.last_triggered_idx == -1
+
+
+def test_wall_timer_fires_between_updates():
+    import time as _time
+
+    t = TriggerScheduler(dry_run=True, wall_timers=True, schedule_horizon_sec=0.5)
+    assert not t.update(**_fire_kwargs(current_song_t=9.72, next_slide_t=10.0,
+                                       wall_time=None))  # eta 80ms timer
+    _time.sleep(0.3)
+    fired = t.drain_fired()
+    assert len(fired) == 1
+    assert fired[0]["slide_id"] == "01_verse1"
+    assert t.last_triggered_idx == 1
+
+
+def test_wall_timer_rearm_cancels_stale_timer():
+    import time as _time
+
+    t = TriggerScheduler(dry_run=True, wall_timers=True, schedule_horizon_sec=0.5)
+    assert not t.update(**_fire_kwargs(current_song_t=9.65, next_slide_t=10.0,
+                                       wall_time=None))
+    # new estimate says we're further away — re-arm with a later fire
+    assert not t.update(**_fire_kwargs(current_song_t=9.62, next_slide_t=10.0,
+                                       wall_time=None))
+    _time.sleep(0.4)
+    assert len(t.drain_fired()) == 1  # exactly one fire despite two arms
