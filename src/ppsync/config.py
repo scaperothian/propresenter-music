@@ -7,6 +7,9 @@ MODEL_ID = "m-a-p/MERT-v1-95M"
 TARGET_SR = 24_000          # MERT expects 24 kHz mono
 MERT_FRAME_RATE = 75        # MERT outputs ~75 frames per second
 MERT_LAYER = 7              # transformer layer to extract (0=CNN, 1-12=transformer)
+MERT_FP16 = True            # run MERT in float16 (faster on MPS).  Reference
+                            # cache and live MUST use the same precision —
+                            # rebuild caches after flipping this.
 
 # ---------------------------------------------------------------------------
 # Preprocessing: dense reference embeddings (offline, configurable via CLI)

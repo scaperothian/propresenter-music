@@ -6,14 +6,24 @@ import math
 
 import torch
 
-from .config import MODEL_ID, TARGET_SR
+from .config import MERT_FP16, MERT_LAYER, MODEL_ID, TARGET_SR
 
 EMBED_CHUNK_SEC = 30.0  # audio processed per forward pass (keeps GPU memory bounded)
 
 
-def load_model(device: str | None = None) -> tuple:
+def load_model(
+    device: str | None = None,
+    truncate_after_layer: int | None = MERT_LAYER,
+    fp16: bool = MERT_FP16,
+) -> tuple:
     """
     Download (or load from cache) MERT and its feature extractor.
+
+    *truncate_after_layer* drops transformer layers beyond the extraction
+    layer — hidden_states[k] only depends on layers 1..k, so the output is
+    bit-identical while skipping the dead compute (layers 8-12 for layer 7,
+    ~40% of the transformer).  *fp16* halves precision for MPS speed;
+    reference cache and live inference must use the SAME precision.
 
     Returns:
         (processor, model)  — model on *device*, in eval mode
@@ -29,12 +39,27 @@ def load_model(device: str | None = None) -> tuple:
             device = "cpu"
 
     processor = Wav2Vec2FeatureExtractor.from_pretrained(MODEL_ID, trust_remote_code=True)
-    model = (
-        AutoModel.from_pretrained(MODEL_ID, trust_remote_code=True)
-        .to(device)
-        .eval()
-    )
+    model = AutoModel.from_pretrained(MODEL_ID, trust_remote_code=True)
+    if truncate_after_layer is not None and 1 <= truncate_after_layer < len(model.encoder.layers):
+        model.encoder.layers = model.encoder.layers[:truncate_after_layer]
+    if fp16 and device != "cpu":  # fp16 inference is slow/unstable on CPU
+        model = model.half()
+    model = model.to(device).eval()
     return processor, model
+
+
+def prep_inputs(inputs, model):
+    """Match processor output dtype/device to the model (fp16 support)."""
+    dtype = next(model.parameters()).dtype
+    device = next(model.parameters()).device
+    out = {}
+    for k, v in inputs.items():
+        if torch.is_floating_point(v):
+            v = v.to(device=device, dtype=dtype)
+        else:
+            v = v.to(device=device)
+        out[k] = v
+    return out
 
 
 def embed_audio(
@@ -83,18 +108,17 @@ def embed_audio(
             end = min(start + chunk_samples, total_samples)
             chunk = waveform[start:end]
 
-            inputs = processor(
-                chunk.numpy(),
-                sampling_rate=TARGET_SR,
-                return_tensors="pt",
-            ).to(device)
+            inputs = prep_inputs(
+                processor(chunk.numpy(), sampling_rate=TARGET_SR, return_tensors="pt"),
+                model,
+            )
 
             with torch.no_grad():
                 out = model(**inputs, output_hidden_states=True)
 
             # hidden_states: tuple of (L+1) tensors, each [1, T, D]
             hidden = torch.stack(out.hidden_states, dim=0).squeeze(1)
-            all_hidden.append(hidden.cpu())
+            all_hidden.append(hidden.float().cpu())
             bar.update((end - start) / TARGET_SR)
 
     return torch.cat(all_hidden, dim=1)  # [L+1, total_T, D]
@@ -115,13 +139,12 @@ def embed_chunk_live(
     Returns:
         [num_layers + 1, T_chunk, hidden_dim]
     """
-    inputs = processor(
-        waveform_chunk.numpy(),
-        sampling_rate=TARGET_SR,
-        return_tensors="pt",
-    ).to(device)
+    inputs = prep_inputs(
+        processor(waveform_chunk.numpy(), sampling_rate=TARGET_SR, return_tensors="pt"),
+        model,
+    )
 
     with torch.no_grad():
         out = model(**inputs, output_hidden_states=True)
 
-    return torch.stack(out.hidden_states, dim=0).squeeze(1).cpu()
+    return torch.stack(out.hidden_states, dim=0).squeeze(1).float().cpu()

@@ -24,8 +24,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .config import CHUNK_SEC, LOOKBACK_SEC, MERT_LAYER, STRIDE_SEC, TARGET_SR
-from .embed import embed_audio, load_model
+from .config import CHUNK_SEC, LOOKBACK_SEC, MERT_FP16, MERT_LAYER, STRIDE_SEC, TARGET_SR
+from .embed import embed_audio, load_model, prep_inputs
 from .io import finalize_slide_stops, load_audio, load_manifest
 from .transform import apply_contrastive, fit_global
 from .windows import pool_slide_embeddings, strided_window_embeddings
@@ -76,10 +76,12 @@ def sliding_window_embeddings(
             for t in edges[b0:b0 + batch_size]:
                 s1 = min(int(t * sr), wav.shape[0])
                 windows.append(wav[s1 - win:s1].numpy())
-            inputs = processor(windows, sampling_rate=sr, return_tensors="pt").to(device)
+            inputs = prep_inputs(
+                processor(windows, sampling_rate=sr, return_tensors="pt"), model
+            )
             out = model(**inputs, output_hidden_states=True)
             h = out.hidden_states[mert_layer]  # [B, T, D]
-            embs.append(h.mean(dim=1).cpu())
+            embs.append(h.mean(dim=1).float().cpu())
 
     return torch.cat(embs, dim=0), edges
 
@@ -191,7 +193,7 @@ def preprocess_song(
     # uses: MERT frames depend on their attention context, so embeddings from
     # 30s chunks live in a different distribution than live ones and cosine
     # matching across the two fails entirely.
-    processor, model = load_model(device)
+    processor, model = load_model(device, truncate_after_layer=mert_layer)
     frame_rate = float(0)
     if embed_mode == "sliding":
         # One forward pass per [t - lookback, t] window — phase-independent,
@@ -270,6 +272,7 @@ def preprocess_song(
         "embed_mode": np.array(embed_mode),
         "slide_pp_indices": slide_pp_indices,
         "pp_uuid": np.array(pp_uuid),
+        "mert_fp16": np.bool_(MERT_FP16 and device != "cpu"),
     }
     np.savez(str(output_path), **payload)
     print(f"\nCache saved to: {output_path}")

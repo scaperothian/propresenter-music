@@ -51,6 +51,7 @@ from .config import (
     JUMP_MIN_COST_MARGIN,
     LIVE_MEAN_ADAPT_SEC,
     LOOKBACK_SEC,
+    MERT_FP16,
     MERT_FRAME_RATE,
     MERT_LAYER,
     SILENCE_RMS_DBFS,
@@ -148,6 +149,14 @@ class SongAligner:
         # edge frames, so this is below the nominal MERT_FRAME_RATE).  Live
         # pooling must span the same number of frames the reference used.
         self.frame_rate: float = float(cache.get("frame_rate", MERT_FRAME_RATE))
+        # Precision mismatch between cache and live MERT shifts the embedding
+        # distribution — same failure mode as the chunk-context mismatch.
+        cache_fp16 = bool(cache.get("mert_fp16", False))
+        live_fp16 = MERT_FP16 and device != "cpu"
+        if cache_fp16 != live_fp16:
+            print(f"WARNING: cache built with fp16={cache_fp16} but live MERT runs "
+                  f"fp16={live_fp16} — embeddings will not match well; "
+                  f"re-run ppsync-preprocess.")
 
         # HMM
         self.hmm = HMMPredictor(

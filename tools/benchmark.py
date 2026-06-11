@@ -177,6 +177,50 @@ def run_offset(
     }
 
 
+def _fmt_delta(d_sec: float) -> str:
+    return f"{d_sec * 1000:+.0f}ms" if abs(d_sec) < 1.0 else f"{d_sec:+.2f}s"
+
+
+def print_offset_report(r: dict, gt: list[tuple[str, float]],
+                        window_sec: float, warmup_sec: float) -> None:
+    """Readable per-offset report: one line per slide with target/fired/verdict."""
+    off = r["offset"]
+    horizon = off + warmup_sec
+    end_t = None if r.get("duration") is None else off + r["duration"]
+    fired: dict[str, list[float]] = {}
+    for sid, t in r["triggered"]:
+        fired.setdefault(sid, []).append(t)
+
+    print(f"\n── start offset {off:g}s " + "─" * 45)
+    lock = r["lock_on_s"]
+    lock_s = f"{lock:.1f}s after start" if np.isfinite(lock) else "NEVER"
+    print(f"   lock-on: {lock_s}   tracking error: median {r['dtw_med_s']:.2f}s, "
+          f"{r['track_pct'] * 100:.0f}% of frames within 1s")
+    mae = f"{r['fire_mae_ms']:.0f}ms" if np.isfinite(r["fire_mae_ms"]) else "n/a"
+    print(f"   triggers: {r['hits']}/{r['reachable']} on time (±{window_sec * 1000:.0f}ms)"
+          f"   mean fire error {mae}   spurious {r['spurious']}")
+    print(f"   {'slide':<16} {'target':>8}  {'fired':>8}  verdict")
+    for sid, t_ref in gt:
+        if t_ref < off or (end_t is not None and t_ref > end_t):
+            continue  # before playback start / after slice end — not relevant
+        times = fired.get(sid)
+        ft = times[0] if times else None
+        if t_ref < horizon:
+            verdict = "catch-up (joined mid-song)" if ft else "in warm-up — unscored"
+        elif ft is None:
+            verdict = "NOT FIRED ✗"
+        else:
+            d = ft - t_ref
+            verdict = (f"{_fmt_delta(d)}  ✓" if abs(d) <= window_sec
+                       else f"{_fmt_delta(d)}  LATE ✗")
+        ft_s = f"{ft:7.2f}s" if ft is not None else "      —"
+        print(f"   {sid:<16} {t_ref:7.2f}s  {ft_s}  {verdict}")
+    extras = [(sid, t) for sid, ts in fired.items() for t in ts[1:]]
+    unknown = [(sid, t) for sid, ts in fired.items() if sid not in dict(gt) for t in ts]
+    for sid, t in extras + unknown:
+        print(f"   {sid:<16} {'—':>8}  {t:7.2f}s  duplicate/unknown ✗")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="Start-offset re-sync benchmark.")
     p.add_argument("cache", help="Path to .npz cache from ppsync-preprocess.")
@@ -223,11 +267,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"\nBenchmark: {Path(args.file).name}  "
           f"({len(gt)} boundaries, window={args.window_ms:.0f}ms, "
           f"warmup={args.warmup_sec:.1f}s"
-          + (f", duration={args.duration:.0f}s" if args.duration else "") + ")\n")
-    header = (f"{'offset':>7} {'lock_s':>7} {'dtw_med':>8} {'dtw_p90':>8} {'track%':>7} "
-              f"{'reach':>6} {'hits':>5} {'recall':>7} {'fireMAE':>8} {'spur':>5}")
-    print(header)
-    print("-" * len(header))
+          + (f", duration={args.duration:.0f}s" if args.duration else "") + ")")
 
     results = []
     for off, n_chunks in zip(offsets, chunks_per_offset):
@@ -239,19 +279,12 @@ def main(argv: list[str] | None = None) -> None:
                        args.window_ms, duration=args.duration,
                        trace_path=trace_path, total_chunks=n_chunks)
         results.append(r)
-        print(f"{r['offset']:7.0f} {r['lock_on_s']:7.2f} {r['dtw_med_s']:8.2f} "
-              f"{r['dtw_p90_s']:8.2f} {r['track_pct']:7.2f} "
-              f"{r['reachable']:6d} {r['hits']:5d} {r['recall']:7.2f} "
-              f"{r['fire_mae_ms']:8.1f} {r['spurious']:5d}")
-        if r["triggered"]:
-            print(f"        fired: {', '.join(f'{s}@{t}' for s, t in r['triggered'])}")
-        if r["missed"]:
-            print(f"        missed: {', '.join(r['missed'])}")
+        print_offset_report(r, gt, args.window_ms / 1000.0, args.warmup_sec)
 
     recalls = [r["recall"] for r in results if not np.isnan(r["recall"])]
-    print("-" * len(header))
-    print(f"mean recall {np.mean(recalls):.2f}   "
-          f"mean dtw_med {np.mean([r['dtw_med_s'] for r in results]):.2f}s")
+    print("\n" + "═" * 64)
+    print(f"overall: {np.mean(recalls) * 100:.0f}% of reachable slides on time   "
+          f"tracking median {np.mean([r['dtw_med_s'] for r in results]):.2f}s")
     print(f"latency/chunk (budget {CHUNK_SEC * 1000:.0f}ms): "
           f"mean {np.mean([r['proc_mean_ms'] for r in results]):.1f}  "
           f"p50 {np.mean([r['proc_p50_ms'] for r in results]):.1f}  "
