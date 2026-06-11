@@ -48,6 +48,8 @@ from .config import (
     JUMP_AGREE_SEC,
     JUMP_CONFIRM_FRAMES,
     JUMP_GUARD_SEC,
+    JUMP_MIN_COST_MARGIN,
+    LIVE_MEAN_ADAPT_SEC,
     LOOKBACK_SEC,
     MERT_FRAME_RATE,
     MERT_LAYER,
@@ -60,7 +62,6 @@ from .dtw import align as dtw_align
 from .embed import embed_chunk_live
 from .hmm import HMMPredictor
 from .preprocess import load_cache
-from .transform import apply_contrastive
 from .trigger import TriggerScheduler
 
 
@@ -140,7 +141,6 @@ class SongAligner:
             self.slide_pp_indices = np.arange(len(self.slide_ids), dtype=np.int32)
         self.pp_uuid: str = str(cache["pp_uuid"]) if "pp_uuid" in cache else ""
         self.global_emb: np.ndarray = cache["global_emb"]      # [D]
-        self.global_emb_t = torch.from_numpy(self.global_emb)
         self.song_duration: float = float(cache["song_duration"])
         self.stride_sec: float = float(cache["stride_sec"])
         self.mert_layer: int = int(cache["mert_layer"])
@@ -193,6 +193,14 @@ class SongAligner:
         self._initialized: bool = False
         self._confirmed_t: float = 0.0  # last high-confidence song position
 
+        # Live-mean adaptation: running mean of raw live pooled embeddings,
+        # blended over the cache's song mean as salient audio accumulates.
+        # Mic/PA/room coloration shifts all live embeddings by a common
+        # offset; centering live frames on their OWN mean cancels it.
+        self._live_mean_sum: np.ndarray = np.zeros_like(self.global_emb, dtype=np.float64)
+        self._live_mean_n: int = 0
+        self._live_mean_full_n = max(1, int(LIVE_MEAN_ADAPT_SEC / chunk_sec))
+
         # Initial-lock consistency: repeated sections produce ambiguous
         # matches, so the first anchor needs several agreeing confident frames.
         self._init_hist: deque[float] = deque(maxlen=INIT_CONSISTENT_FRAMES)
@@ -218,6 +226,8 @@ class SongAligner:
         self._confirmed_t = 0.0
         self._init_hist.clear()
         self._jump_hist.clear()
+        self._live_mean_sum = np.zeros_like(self.global_emb, dtype=np.float64)
+        self._live_mean_n = 0
         self._chunk_count = 0
         self.hmm.reset()
         self.trigger.reset()
@@ -227,6 +237,33 @@ class SongAligner:
         self._confirmed_t = refined_t
         self._search_lo_t = max(0.0, refined_t - 2.0)
         self._search_hi_t = refined_t + self.dtw_search_sec
+
+    def _jump_beats_local(self, live_buffer: np.ndarray, jump_result: dict,
+                          dtw_ctx_sec: float) -> bool:
+        """
+        True when the pending jump target's DTW cost beats a re-alignment
+        restricted to the neighbourhood of the current anchor by
+        JUMP_MIN_COST_MARGIN (normalized per query frame).
+
+        jump_result is the window-wide best alignment (= the jump target).
+        If the local hypothesis explains the live audio almost as well, the
+        "jump" is a wrong-repeat match and must be rejected.
+        """
+        jump_cost = jump_result["path_cost"]
+        if not np.isfinite(jump_cost):
+            return False
+        local = dtw_align(
+            live_buffer=live_buffer,
+            ref_embs=self.ref_embs,
+            ref_timestamps=self.ref_timestamps,
+            search_lo_t=max(0.0, self._confirmed_t - 2.0),
+            search_hi_t=self._confirmed_t + JUMP_GUARD_SEC,
+            dtw_context_sec=dtw_ctx_sec,
+        )
+        if not np.isfinite(local["path_cost"]):
+            return True  # no usable local hypothesis (e.g. song end)
+        m = max(len(live_buffer), 1)
+        return (jump_cost / m) + JUMP_MIN_COST_MARGIN <= (local["path_cost"] / m)
 
     def process_chunk(
         self,
@@ -263,9 +300,27 @@ class SongAligner:
                     "rms_dbfs": round(rms_dbfs, 1)}
 
         frames = self._embed_chunk(torch.from_numpy(self._audio_ring))  # [T, D]
-        pooled_raw = frames.mean(dim=0)  # [D]
-        pooled_norm = apply_contrastive(pooled_raw, self.global_emb_t).numpy()  # [D]
-        self._dtw_emb_buffer.append(pooled_norm)
+        pooled_raw = frames.mean(dim=0).numpy()  # [D] raw (un-normalized)
+        self._dtw_emb_buffer.append(pooled_raw)
+
+        # Blend the normalization mean from the cache's song mean toward the
+        # live stream's own running mean.  Mic/PA/room coloration offsets all
+        # live embeddings alike; centering on the live mean cancels it (the
+        # reference side is likewise centered on its own song mean).  The
+        # whole buffer is re-normalized with the current mean each frame so
+        # the DTW query stays internally consistent.
+        self._live_mean_sum += pooled_raw.astype(np.float64)
+        self._live_mean_n += 1
+        w = min(1.0, self._live_mean_n / self._live_mean_full_n)
+        live_mean = ((1.0 - w) * self.global_emb.astype(np.float64)
+                     + w * (self._live_mean_sum / self._live_mean_n))
+
+        def _contrast(arr: np.ndarray) -> np.ndarray:
+            centered = arr - live_mean
+            norms = np.linalg.norm(centered, axis=-1, keepdims=True)
+            return (centered / np.maximum(norms, 1e-9)).astype(np.float32)
+
+        pooled_norm = _contrast(pooled_raw)
 
         # DTW on a near-empty buffer matches noise confidently (a 1-frame query
         # fits anywhere); hold off all alignment until it has minimum context.
@@ -279,7 +334,7 @@ class SongAligner:
         coarse_confidence = float(sims[coarse_slide_idx])
 
         # ---- Layer 2: Subsequence DTW ----------------------------------------
-        live_buffer = np.stack(list(self._dtw_emb_buffer))  # [M, D]
+        live_buffer = _contrast(np.stack(list(self._dtw_emb_buffer)))  # [M, D]
         dtw_ctx_sec = max(self.dtw_live_sec * 2, 10.0)
 
         dtw_result = dtw_align(
@@ -327,10 +382,13 @@ class SongAligner:
                     )
             elif refined_t - self._confirmed_t > JUMP_GUARD_SEC:
                 # Big forward jump: wrong-repeat matches look exactly like
-                # this.  Require agreeing consecutive frames to accept.
+                # this, and a stable wrong match agrees with itself — so on
+                # top of consecutive agreement, the jump target must BEAT a
+                # local re-alignment near the current anchor by a cost margin.
                 self._jump_hist.append(refined_t)
                 if (len(self._jump_hist) == self._jump_hist.maxlen
-                        and max(self._jump_hist) - min(self._jump_hist) <= JUMP_AGREE_SEC):
+                        and max(self._jump_hist) - min(self._jump_hist) <= JUMP_AGREE_SEC
+                        and self._jump_beats_local(live_buffer, dtw_result, dtw_ctx_sec)):
                     obs_accepted = True
                     self._advance_anchor(refined_t)
                     self._jump_hist.clear()

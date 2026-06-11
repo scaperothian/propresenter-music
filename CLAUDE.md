@@ -164,9 +164,21 @@ returns top-K separated candidates and DTW-refines each (lowest path cost
 wins), and locking requires `INIT_CONSISTENT_FRAMES` consecutive confident
 frames agreeing within `INIT_AGREE_SEC`; after lock, a forward jump larger
 than `JUMP_GUARD_SEC` needs `JUMP_CONFIRM_FRAMES` agreeing frames before the
-anchor, HMM, or trigger see it.  Triggers never fire pre-lock.  The DTW query
-buffer holds `DTW_LIVE_SEC=6s` but starts matching at `DTW_MIN_LIVE_SEC=4s`,
-so warm-up stays ~6s while the steady-state query is richer.
+anchor, HMM, or trigger see it — AND the jump target must beat a local
+re-alignment near the current anchor by `JUMP_MIN_COST_MARGIN` (a stable
+wrong match agrees with itself; only a cost margin separates a real seek from
+a wrong repeat).  Locking likewise requires a best-vs-runner-up margin
+(`INIT_MIN_COST_MARGIN`) with a 16s pre-lock query buffer.  Triggers never
+fire pre-lock.  The DTW query buffer holds `DTW_LIVE_SEC=6s` but starts
+matching at `DTW_MIN_LIVE_SEC=4s`, so warm-up stays ~6s.
+
+**Live-mean adaptation (mic/PA coloration).**  Live frames are contrastive-
+normalized against a blend of the cache's song mean and the live stream's own
+running mean (`LIVE_MEAN_ADAPT_SEC`).  Coloration shifts all live embeddings
+by a common offset; without cancelling it the instrumental outro becomes
+every frame's nearest neighbour (observed live AND on EQ'd test audio).
+Trade-off: during the first ~20s the mean is immature and fires can lag ~1-2s
+even on clean audio; colored-audio recall goes 0.00 → 0.85.
 
 **Cold start.**  HMM starts with a uniform prior.  After the first coarse MERT match exceeds threshold, `set_prior_from_coarse()` concentrates belief on the detected slide; then DTW+HMM take over.
 

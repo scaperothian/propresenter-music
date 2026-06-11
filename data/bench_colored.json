@@ -1,0 +1,194 @@
+[
+  {
+    "offset": 0.0,
+    "duration": null,
+    "dtw_med_s": 71.45000000000002,
+    "dtw_p90_s": 164.91000000000005,
+    "hmm_med_s": 65.71900000000002,
+    "hmm_p90_s": 149.07900000000004,
+    "track_pct": 0.048975957257346395,
+    "lock_on_s": 5.6,
+    "reachable": 14,
+    "hits": 0,
+    "recall": 0.0,
+    "fire_mae_ms": NaN,
+    "fire_max_ms": NaN,
+    "spurious": 5,
+    "n_triggers": 6,
+    "proc_mean_ms": 96.67092511013216,
+    "proc_p50_ms": 107.1,
+    "proc_p95_ms": 119.33,
+    "max_proc_ms": 183.8,
+    "rt_ok_pct": 1.0,
+    "missed": [
+      "01_verse1",
+      "02_prechorus",
+      "03_prechorus",
+      "04_chorus",
+      "05_chorus",
+      "06_verse2",
+      "07_verse2",
+      "08_prechorus2",
+      "09_prechorus2",
+      "10_chorus",
+      "11_chorus",
+      "12_bridge",
+      "13_chorus",
+      "14_chorus"
+    ],
+    "triggered": [
+      [
+        "00_verse1",
+        11.2
+      ],
+      [
+        "01_verse1",
+        28.8
+      ],
+      [
+        "03_prechorus",
+        29.8
+      ],
+      [
+        "07_verse2",
+        30.8
+      ],
+      [
+        "11_chorus",
+        40.2
+      ],
+      [
+        "14_chorus",
+        45.6
+      ]
+    ]
+  },
+  {
+    "offset": 62.0,
+    "duration": null,
+    "dtw_med_s": 0.8000000000000114,
+    "dtw_p90_s": 1.6500000000000028,
+    "hmm_med_s": 4.015000000000001,
+    "hmm_p90_s": 12.554999999999998,
+    "track_pct": 0.6715867158671587,
+    "lock_on_s": 5.599999999999994,
+    "reachable": 10,
+    "hits": 9,
+    "recall": 0.9,
+    "fire_mae_ms": 471.222222222219,
+    "fire_max_ms": 633.9999999999861,
+    "spurious": 1,
+    "n_triggers": 11,
+    "proc_mean_ms": 90.64181818181818,
+    "proc_p50_ms": 85.2,
+    "proc_p95_ms": 127.9,
+    "max_proc_ms": 236.1,
+    "rt_ok_pct": 0.9963636363636363,
+    "missed": [
+      "07_verse2"
+    ],
+    "triggered": [
+      [
+        "04_chorus",
+        68.0
+      ],
+      [
+        "05_chorus",
+        74.8
+      ],
+      [
+        "06_verse2",
+        86.2
+      ],
+      [
+        "07_verse2",
+        95.4
+      ],
+      [
+        "08_prechorus2",
+        106.0
+      ],
+      [
+        "09_prechorus2",
+        117.6
+      ],
+      [
+        "10_chorus",
+        128.6
+      ],
+      [
+        "11_chorus",
+        138.4
+      ],
+      [
+        "12_bridge",
+        169.6
+      ],
+      [
+        "13_chorus",
+        182.2
+      ],
+      [
+        "14_chorus",
+        194.6
+      ]
+    ]
+  },
+  {
+    "offset": 90.0,
+    "duration": null,
+    "dtw_med_s": 0.8499999999999943,
+    "dtw_p90_s": 1.6500000000000028,
+    "hmm_med_s": 4.440999999999988,
+    "hmm_p90_s": 13.44860000000001,
+    "track_pct": 0.649331352154532,
+    "lock_on_s": 9.200000000000003,
+    "reachable": 7,
+    "hits": 7,
+    "recall": 1.0,
+    "fire_mae_ms": 529.1428571428562,
+    "fire_max_ms": 633.9999999999861,
+    "spurious": 0,
+    "n_triggers": 8,
+    "proc_mean_ms": 97.08963503649635,
+    "proc_p50_ms": 96.2,
+    "proc_p95_ms": 128.8,
+    "max_proc_ms": 219.5,
+    "rt_ok_pct": 0.9985401459854014,
+    "missed": [],
+    "triggered": [
+      [
+        "07_verse2",
+        96.0
+      ],
+      [
+        "08_prechorus2",
+        106.2
+      ],
+      [
+        "09_prechorus2",
+        117.8
+      ],
+      [
+        "10_chorus",
+        128.8
+      ],
+      [
+        "11_chorus",
+        138.4
+      ],
+      [
+        "12_bridge",
+        169.6
+      ],
+      [
+        "13_chorus",
+        182.2
+      ],
+      [
+        "14_chorus",
+        194.6
+      ]
+    ]
+  }
+]

@@ -50,6 +50,12 @@ class TriggerScheduler:
         self.rest_timeout_sec = rest_timeout_sec
         self.dry_run = dry_run
         self.pp_controller = pp_controller
+        # Delivery observability: outcome of the most recent fire, written by
+        # the sender thread and surfaced in telemetry frames.
+        self.mode = ("dry-run" if dry_run
+                     else "propresenter" if pp_controller is not None
+                     else "legacy-post")
+        self.last_fire_result: dict | None = None
 
         self._last_triggered_idx: int = -1
         self._last_trigger_wall_t: float = 0.0
@@ -134,6 +140,8 @@ class TriggerScheduler:
             if self.dry_run:
                 print(f"[TRIGGER dry-run] {slide_id}  →  "
                       f"go_to_slide({pp_slide_index + 1})")
+                self.last_fire_result = {"slide_id": slide_id, "mode": "dry-run",
+                                         "ok": True}
                 return
             threading.Thread(
                 target=self._send_pp,
@@ -165,8 +173,12 @@ class TriggerScheduler:
             print(f"[TRIGGER] slide={slide_id!r}  t={boundary_t:.2f}s  "
                   f"conf={confidence:.2f}  → go_to_slide({pp_slide_index + 1}) "
                   f"{'ok' if ok else 'FAILED'}")
+            self.last_fire_result = {"slide_id": slide_id, "mode": "propresenter",
+                                     "ok": bool(ok)}
         except Exception as exc:  # client raises requests exceptions internally
             print(f"[TRIGGER error] go_to_slide({pp_slide_index + 1}): {exc}")
+            self.last_fire_result = {"slide_id": slide_id, "mode": "propresenter",
+                                     "ok": False, "error": str(exc)}
 
     def _send_legacy(self, payload: dict, slide_id: str, boundary_t: float,
                      confidence: float) -> None:
@@ -174,5 +186,9 @@ class TriggerScheduler:
             resp = requests.post(self.rest_url, json=payload, timeout=self.rest_timeout_sec)
             print(f"[TRIGGER] slide={slide_id!r}  t={boundary_t:.2f}s  "
                   f"conf={confidence:.2f}  → HTTP {resp.status_code}")
+            self.last_fire_result = {"slide_id": slide_id, "mode": "legacy-post",
+                                     "ok": resp.status_code < 400}
         except requests.RequestException as exc:
             print(f"[TRIGGER error] {exc}")
+            self.last_fire_result = {"slide_id": slide_id, "mode": "legacy-post",
+                                     "ok": False, "error": str(exc)}

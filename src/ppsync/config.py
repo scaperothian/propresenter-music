@@ -31,6 +31,16 @@ DTW_SEARCH_SEC = 45.0       # forward search window in reference audio
 DTW_BAND_RATIO = 0.1        # Sakoe-Chiba band as fraction of query length
 
 # ---------------------------------------------------------------------------
+# Live-mean adaptation (cross-acoustic robustness)
+# ---------------------------------------------------------------------------
+LIVE_MEAN_ADAPT_SEC = 20.0  # blend from the cache's song mean to the live
+                            # stream's own running mean over this much salient
+                            # audio.  PA/room/mic coloration shifts every live
+                            # embedding by a common offset; subtracting the
+                            # live mean cancels it (the outro otherwise
+                            # becomes everything's nearest neighbour).
+
+# ---------------------------------------------------------------------------
 # Initial lock & jump guard (repeat-ambiguity defenses)
 # ---------------------------------------------------------------------------
 INIT_TOP_K = 5              # cosine candidates DTW-refined during initial lock
@@ -50,6 +60,11 @@ INIT_MIN_COST_MARGIN = 0.05  # refuse to lock while best-vs-runner-up DTW cost
 JUMP_GUARD_SEC = 5.0        # forward jumps larger than this need confirmation
 JUMP_CONFIRM_FRAMES = 3     # consecutive agreeing frames to accept a big jump
 JUMP_AGREE_SEC = 2.5        # agreement tolerance for those frames
+JUMP_MIN_COST_MARGIN = 0.05  # ...and the jump target's DTW cost must beat a
+                             # local re-alignment near the current anchor by
+                             # this margin — a stable wrong match agrees with
+                             # itself, so stability alone cannot accept jumps
+                             # (colored-audio trace: runaway 25s -> 102 -> 219)
 
 # ---------------------------------------------------------------------------
 # HMM predictor
