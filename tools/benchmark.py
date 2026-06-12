@@ -29,9 +29,9 @@ triggered and is excluded rather than counted as a miss):
     spurious       triggers that match no reachable boundary in-window
 
 Usage:
-    python tools/benchmark.py data/studio_cache.npz \
+    python tools/benchmark.py data/incubus/drive/incubus_drive_cache.npz \
         --file /Users/das/propresenter-dataset/incubus/drive/studio_drive.wav \
-        --manifest data/studio_manifest.json \
+        --manifest data/incubus/drive/incubus_drive_manifest.json \
         --offsets 0,30,64,95,130,170
 
     # Partial-song test: play only 40s starting at 64s
@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -275,7 +276,9 @@ def main(argv: list[str] | None = None) -> None:
     )
     print(f"matcher: {aligner.matcher}")
 
-    print(f"\nBenchmark: {Path(args.file).name}  "
+    artist_str = f"{aligner.artist} — " if aligner.artist else ""
+    print(f"\nBenchmark: {artist_str}{aligner.song_id}  [{aligner.song_slug}]")
+    print(f"  file: {Path(args.file).name}  "
           f"({len(gt)} boundaries, window={args.window_ms:.0f}ms, "
           f"warmup={args.warmup_sec:.1f}s"
           + (f", duration={args.duration:.0f}s" if args.duration else "") + ")")
@@ -304,7 +307,20 @@ def main(argv: list[str] | None = None) -> None:
           f"rt-ok {100 * np.mean([r['rt_ok_pct'] for r in results]):.1f}%")
 
     if args.json_out:
-        Path(args.json_out).write_text(json.dumps(results, indent=2))
+        # Self-describing results: the file records WHICH song/audio/matcher
+        # produced it (older bench files were bare lists and relied on their
+        # filename for that).
+        payload = {
+            "artist": aligner.artist,
+            "song_id": aligner.song_id,
+            "song_slug": aligner.song_slug,
+            "audio_file": str(args.file),
+            "cache": str(args.cache),
+            "matcher": aligner.matcher,
+            "date": datetime.now().isoformat(timespec="seconds"),
+            "results": results,
+        }
+        Path(args.json_out).write_text(json.dumps(payload, indent=2))
         print(f"\nWrote {args.json_out}")
 
 

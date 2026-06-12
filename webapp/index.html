@@ -16,6 +16,7 @@
   }
   header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 16px; }
   header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  #song { color: var(--dim); font-size: 13px; }
   #status {
     padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 600;
     background: var(--line); color: var(--dim); text-transform: uppercase;
@@ -57,6 +58,7 @@
 <body>
 <header>
   <h1>ppsync live monitor</h1>
+  <span id="song"></span>
   <span id="status">waiting</span>
   <span id="conn">connecting…</span>
 </header>
@@ -162,6 +164,12 @@ function setStatus(s) {
 
 function onFrame(f) {
   lastFrameAt = Date.now();
+  if (f.event === "meta") {                        // session header line
+    const who = f.artist ? `${f.artist} — ` : "";
+    document.getElementById("song").textContent = `${who}${f.song_id || ""}`;
+    document.title = `ppsync — ${who}${f.song_id || ""}`;
+    return;
+  }
   if (f.status) { setStatus(f.status); return; }   // buffering / silence
   setStatus("aligned");
 

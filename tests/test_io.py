@@ -84,6 +84,66 @@ def test_load_manifest_missing_slides_raises(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# song_slug / load_song_meta
+# ---------------------------------------------------------------------------
+
+def test_song_slug_artist_and_title():
+    from ppsync.io import song_slug
+
+    assert song_slug("Incubus", "Drive") == "incubus_drive"
+    assert song_slug("Forrest Frank", "Good Day") == "forrest_frank_good_day"
+
+
+def test_song_slug_normalizes_punctuation():
+    from ppsync.io import song_slug
+
+    assert song_slug("AC/DC", "T.N.T.") == "ac_dc_t_n_t"
+    assert song_slug(" Sigur Rós ", "Hoppípolla!") == "sigur_r_s_hopp_polla"
+
+
+def test_song_slug_missing_parts():
+    from ppsync.io import song_slug
+
+    assert song_slug("", "Drive") == "drive"      # no artist → title alone
+    assert song_slug("", "") == "unknown_song"
+
+
+def test_song_dir_hierarchy():
+    from ppsync.io import song_dir
+
+    assert song_dir("Incubus", "Drive") == Path("data/incubus/drive")
+    assert song_dir("Forrest Frank", "Good Day", base="/x") == \
+        Path("/x/forrest_frank/good_day")
+    assert song_dir("", "") == Path("data/unknown_artist/unknown_song")
+
+
+def test_load_song_meta(tmp_path):
+    from ppsync.io import load_song_meta
+
+    path = tmp_path / "m.json"
+    path.write_text(json.dumps({
+        "song_id": "Drive", "artist": "Incubus",
+        "ref_audio": "x.wav", "pp_uuid": "ABC", "slides": [],
+    }))
+    meta = load_song_meta(path)
+    assert meta["song_id"] == "Drive"
+    assert meta["artist"] == "Incubus"
+    assert meta["slug"] == "incubus_drive"
+    assert meta["pp_uuid"] == "ABC"
+
+
+def test_load_song_meta_defaults(tmp_path):
+    from ppsync.io import load_song_meta
+
+    path = tmp_path / "old_manifest.json"
+    path.write_text(json.dumps({"ref_audio": "x.wav", "slides": []}))
+    meta = load_song_meta(path)
+    assert meta["song_id"] == "old_manifest"  # falls back to file stem
+    assert meta["artist"] == ""
+    assert meta["slug"] == "old_manifest"
+
+
+# ---------------------------------------------------------------------------
 # load_audio
 # ---------------------------------------------------------------------------
 

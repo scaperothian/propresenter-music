@@ -9,3 +9,6 @@ dist/
 *.jsonl
 .pytest_cache/
 .DS_Store
+
+# Song data artifacts (manifests, caches, benchmark history) — local only for now
+data/

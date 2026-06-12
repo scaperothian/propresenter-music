@@ -3,12 +3,63 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import torch
 import torchaudio
 
 from .config import TARGET_SR
+
+
+def _slug_part(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
+
+
+def song_slug(artist: str, title: str) -> str:
+    """
+    Filesystem slug identifying a song by artist AND title, e.g.
+    ``('Incubus', 'Drive') -> 'incubus_drive'``.
+
+    Every per-song artifact (manifest, embedding cache, benchmark results,
+    telemetry logs) is named with this slug so artifacts from different songs
+    never collide and are identifiable from the filename alone.
+    """
+    parts = [p for p in (_slug_part(artist), _slug_part(title)) if p]
+    return "_".join(parts) or "unknown_song"
+
+
+def song_dir(artist: str, title: str, base: str | Path = "data") -> Path:
+    """
+    Directory holding all of one song's artifacts:
+    ``<base>/<artist>/<title>`` — e.g. ``data/incubus/drive``.
+
+    The data tree is one directory per artist, one subdirectory per song;
+    manifests, caches, and benchmark results for the song all live there.
+    """
+    artist_part = _slug_part(artist) or "unknown_artist"
+    title_part = _slug_part(title) or "unknown_song"
+    return Path(base) / artist_part / title_part
+
+
+def load_song_meta(json_path: Path) -> dict:
+    """
+    Read song identity from a manifest JSON without loading slides/audio.
+
+    Returns dict with keys: ``song_id`` (title), ``artist``, ``slug``
+    (``song_slug(artist, song_id)``), ``pp_uuid``.  Missing fields default to
+    empty strings; the slug falls back to the title alone (or the file stem).
+    """
+    with open(json_path) as f:
+        data = json.load(f)
+    song_id = str(data.get("song_id", "") or Path(json_path).stem)
+    artist = str(data.get("artist", ""))
+    return {
+        "song_id": song_id,
+        "artist": artist,
+        "slug": song_slug(artist, song_id),
+        "pp_uuid": str(data.get("pp_uuid", "")),
+    }
 
 
 def load_manifest(json_path: Path) -> tuple[Path, list[dict]]:
