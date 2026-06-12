@@ -15,7 +15,15 @@ MERT_FP16 = True            # run MERT in float16 (faster on MPS).  Reference
 # Preprocessing: dense reference embeddings (offline, configurable via CLI)
 # ---------------------------------------------------------------------------
 LOOKBACK_SEC = 2.0          # sliding window lookback for mean-pooling
-STRIDE_SEC = 0.020          # 20ms stride → dense reference sequence
+STRIDE_SEC = 0.10           # reference window stride.  0.1s validated equal
+                            # to 0.05s on Drive + Your Way Is Better (all
+                            # offsets: same fires to the ms, tracking 0.20s)
+                            # at half the preprocessing cost and ~25% lower
+                            # live matching latency.
+EMBED_BATCH_SIZE = 16       # windows per MERT forward during preprocessing.
+                            # Larger batches are bit-identical but NOT faster
+                            # on MPS (GPU already saturated at 16); may help
+                            # on CUDA.
 
 # ---------------------------------------------------------------------------
 # Live alignment

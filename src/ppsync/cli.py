@@ -17,6 +17,7 @@ from .config import (
     CHUNK_SEC,
     DTW_LIVE_SEC,
     DTW_SEARCH_SEC,
+    EMBED_BATCH_SIZE,
     LOOKBACK_SEC,
     MERT_LAYER,
     REST_URL,
@@ -62,6 +63,11 @@ def _preprocess_parser() -> argparse.ArgumentParser:
         "--device", default=None,
         help="Compute device: cpu | cuda | mps (auto-detected by default).",
     )
+    p.add_argument(
+        "--batch-size", type=int, default=EMBED_BATCH_SIZE, metavar="N",
+        help=f"Windows per MERT forward pass (default: {EMBED_BATCH_SIZE}).  "
+             "Larger = faster preprocessing while GPU memory allows.",
+    )
     p.add_argument("--quiet", action="store_true", help="Suppress progress output.")
     return p
 
@@ -87,6 +93,7 @@ def preprocess_main(argv: list[str] | None = None) -> None:
         mert_layer=args.layer,
         device=args.device,
         show_progress=not args.quiet,
+        batch_size=args.batch_size,
     )
 
 

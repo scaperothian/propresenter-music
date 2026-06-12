@@ -27,7 +27,15 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .config import CHUNK_SEC, LOOKBACK_SEC, MERT_FP16, MERT_LAYER, STRIDE_SEC, TARGET_SR
+from .config import (
+    CHUNK_SEC,
+    EMBED_BATCH_SIZE,
+    LOOKBACK_SEC,
+    MERT_FP16,
+    MERT_LAYER,
+    STRIDE_SEC,
+    TARGET_SR,
+)
 from .embed import embed_audio, load_model, prep_inputs
 from .io import finalize_slide_stops, load_audio, load_manifest, load_song_meta
 from .transform import apply_contrastive, fit_global
@@ -46,7 +54,7 @@ def sliding_window_embeddings(
     lookback_sec: float = LOOKBACK_SEC,
     stride_sec: float = STRIDE_SEC,
     mert_layer: int = MERT_LAYER,
-    batch_size: int = 16,
+    batch_size: int = EMBED_BATCH_SIZE,
     show_progress: bool = True,
 ) -> tuple[torch.Tensor, np.ndarray]:
     """
@@ -151,6 +159,7 @@ def preprocess_song(
     show_progress: bool = True,
     embed_chunk_sec: float = CHUNK_SEC,
     embed_mode: str = "sliding",
+    batch_size: int = EMBED_BATCH_SIZE,
 ) -> dict:
     """
     Run offline preprocessing for one song and save the embedding cache.
@@ -212,7 +221,8 @@ def preprocess_song(
         raw_win_embs, ref_timestamps = sliding_window_embeddings(
             wav, model, processor, device,
             lookback_sec=lookback_sec, stride_sec=stride_sec,
-            mert_layer=mert_layer, show_progress=show_progress,
+            mert_layer=mert_layer, batch_size=batch_size,
+            show_progress=show_progress,
         )
         print(f"  Reference windows: {raw_win_embs.shape[0]:,}")
     else:
