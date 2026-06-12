@@ -8,7 +8,7 @@ showing.  Restores the initially active slide at the end.
 This exercises the exact call path ppsync's TriggerScheduler uses live.
 
 Usage:
-    python tools/pp_trigger_test.py data/studio_manifest.json \
+    python tools/pp_trigger_test.py data/incubus/drive/incubus_drive_manifest.json \
         [--host localhost] [--port 1025] [--settle 0.6]
 """
 

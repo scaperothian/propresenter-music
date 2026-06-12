@@ -54,27 +54,38 @@ python3.11 -m venv .venv
 ### 1. Convert a ProPresenter annotation to a manifest
 
 ```bash
-.venv/bin/python tools/pp_to_manifest.py studio_drive.json -o data/studio_manifest.json
+.venv/bin/python tools/pp_to_manifest.py studio_drive.json --artist "Incubus"
+# → data/incubus/drive/incubus_drive_manifest.json
 ```
 
 This flattens grouped slides with repeated trigger times into chronological slide *instances*, recording each instance's ProPresenter slide index (`pp_slide_index`) and the presentation UUID (`pp_uuid`) so repeated choruses trigger the correct presentation slide.
 
+ProPresenter annotations carry the song title but not the artist, so `--artist` is required and written into the manifest. **Every per-song artifact lives in `data/<artist>/<song>/` and is named by the `<artist>_<title>` slug** (here `data/incubus/drive/` and `incubus_drive`) — manifest, embedding cache, benchmark results, telemetry — so when you process a second song (say Forrest Frank's "Good Day" → `data/forrest_frank/good_day/forrest_frank_good_day_*`), nothing collides and every file says which song it belongs to. The `data/` tree is gitignored: caches are rebuildable and manifests come from your annotation source.
+
 ### 2. Preprocess (offline, once per song)
 
 ```bash
-.venv/bin/ppsync-preprocess data/studio_manifest.json \
-    --output data/studio_cache_sliding.npz --stride 0.05
+.venv/bin/ppsync-preprocess data/incubus/drive/incubus_drive_manifest.json --stride 0.05
+# → data/incubus/drive/incubus_drive_cache.npz  (default: <artist>_<title>_cache.npz)
 ```
+
+Live matching works by comparing the last 2s of
+mic audio against *every* 2s window of the reference song. The npz files are 
+embeddings for a sliding 2s window at every 50ms step of the song (thousands 
+of forward passes — minutes of GPU work), and the cache also stores the 
+song-level mean embedding (used to normalize live audio so "sounds like 
+music" similarity doesn't swamp section differences), per-slide prototype 
+embeddings for coarse matching, and the HMM transition matrix derived from slide durations. Live audio must be embedded *exactly* like the reference ones (same length, same MERT layer, same precision), so changing those settings means rebuilding the cache.
 
 ### 3. Live alignment → ProPresenter
 
 ```bash
 # terminal 1: aligner
-.venv/bin/ppsync-align data/studio_cache_sliding.npz --mic \
-    --pp-host localhost --pp-activate --log /tmp/ppsync.jsonl
+.venv/bin/ppsync-align data/incubus/drive/incubus_drive_cache.npz --mic \
+    --pp-host localhost --pp-activate --log /tmp/ppsync_incubus_drive.jsonl
 
 # terminal 2: live monitor dashboard (http://localhost:8765)
-.venv/bin/python webapp/server.py --log /tmp/ppsync.jsonl
+.venv/bin/python webapp/server.py --log /tmp/ppsync_incubus_drive.jsonl
 ```
 
 `--pp-activate` switches ProPresenter to the cache's presentation if a different one is focused. Use `--dry-run` to print triggers without touching ProPresenter, and `--trigger-buffer MS` to tune how early slides land (default 200ms before the boundary; the pipeline adds ~200ms more earliness on top).
@@ -82,9 +93,10 @@ This flattens grouped slides with repeated trigger times into chronological slid
 ### 4. Benchmark against files (no mic needed)
 
 ```bash
-.venv/bin/python tools/benchmark.py data/studio_cache_sliding.npz \
-    --file studio_drive.wav --manifest data/studio_manifest.json \
-    --offsets 0,30,62,90 [--duration 30] [--matcher dtw|rigid]
+.venv/bin/python tools/benchmark.py data/incubus/drive/incubus_drive_cache.npz \
+    --file studio_drive.wav --manifest data/incubus/drive/incubus_drive_manifest.json \
+    --offsets 0,30,62,90 [--duration 30] [--matcher dtw|rigid] \
+    [--json-out data/incubus/drive/bench_incubus_drive_<experiment>.json]
 ```
 
 Replays the file from each start offset and prints a per-slide report (target time, fired time, verdict) plus tracking error and per-chunk latency against the real-time budget. `--duration` tests partial-song slices; `--trace-out` dumps per-frame telemetry for debugging.
@@ -92,7 +104,7 @@ Replays the file from each start offset and prints a per-slide report (target ti
 ### 5. Verify ProPresenter triggering end to end
 
 ```bash
-.venv/bin/python tools/pp_trigger_test.py data/studio_manifest.json
+.venv/bin/python tools/pp_trigger_test.py data/incubus/drive/incubus_drive_manifest.json
 ```
 
 Closed-loop: commands every distinct presentation slide, reads back the active slide index, restores the original slide. (Also available as auto-skipping pytests in `tests/test_pp_live.py`.)
@@ -102,6 +114,7 @@ Closed-loop: commands every distinct presentation slide, reads back the active s
 ```json
 {
   "song_id": "Drive",
+  "artist": "Incubus",
   "ref_audio": "/path/to/studio_drive.wav",
   "pp_uuid": "C4F878BA-60EF-40CF-9500-7124FC891C87",
   "slides": [
@@ -114,6 +127,8 @@ Closed-loop: commands every distinct presentation slide, reads back the active s
 
 `t_ref` is the true musical timestamp in the reference audio. Repeated sections are separate instances sharing one `pp_slide_index`. `pp_uuid`/`pp_slide_index` are optional for dry-run/benchmark use.
 
+`artist` + `song_id` form the song's filename slug (`incubus_drive`); the slug is stored in the embedding cache and stamped into telemetry logs and benchmark JSON, so every artifact identifies its song even outside its filename.
+
 ## CLI reference
 
 ### `ppsync-preprocess`
@@ -121,7 +136,8 @@ Closed-loop: commands every distinct presentation slide, reads back the active s
 ```
 ppsync-preprocess <manifest.json> [options]
 
-  --output FILE      .npz output path (default: <manifest>.npz)
+  --output FILE      .npz output path (default: <artist>_<title>_cache.npz
+                     beside the manifest, i.e. in the song's data/ directory)
   --lookback SEC     embedding window length        (default: 2.0s)
   --stride SEC       reference window stride        (default: 0.02; 0.05 recommended)
   --layer N          MERT transformer layer         (default: 7)
@@ -189,9 +205,11 @@ webapp/
   server.py          SSE server tailing the telemetry log
   index.html         live dashboard (slide box + sparklines)
 
-data/
-  studio_manifest.json     Drive manifest (from propresenter-dataset)
-  bench_*.json             benchmark results history
+data/                       (gitignored — local song artifacts)
+  <artist>/<song>/          one directory per song, e.g. data/incubus/drive/
+    <slug>_manifest.json    manifest (slug = <artist>_<song>)
+    <slug>_cache.npz        embedding cache
+    bench_<slug>_*.json     benchmark results history
 ```
 
 ## Design notes

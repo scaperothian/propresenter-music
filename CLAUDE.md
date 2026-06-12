@@ -39,24 +39,26 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
     --ground-truth data/test_manifest.json
 
 # Convert a ProPresenter annotation JSON to a ppsync manifest
-.venv/bin/python tools/pp_to_manifest.py <song>.json -o <song>_manifest.json
+# (default output: data/<artist>/<title>/<artist>_<title>_manifest.json)
+.venv/bin/python tools/pp_to_manifest.py <song>.json --artist "<Artist>"
 
 # Live mic -> ProPresenter (REST API, default port 1025)
-.venv/bin/ppsync-align data/studio_cache_sliding.npz --mic \
+.venv/bin/ppsync-align data/incubus/drive/incubus_drive_cache.npz --mic \
     --pp-host localhost [--pp-activate] [--trigger-buffer 0] \
-    [--log /tmp/ppsync.jsonl]
+    [--log /tmp/ppsync_incubus_drive.jsonl]
 
 # Live monitor web UI (tails the --log file; see webapp/README.md)
-.venv/bin/python webapp/server.py --log /tmp/ppsync.jsonl   # localhost:8765
+.venv/bin/python webapp/server.py \
+    --log /tmp/ppsync_incubus_drive.jsonl   # localhost:8765
 
 # Start-offset re-sync benchmark (file-based, no mic; see tools/benchmark.py)
-.venv/bin/python tools/benchmark.py data/studio_cache_sliding.npz \
+.venv/bin/python tools/benchmark.py data/incubus/drive/incubus_drive_cache.npz \
     --file <song>.wav --manifest <song>_manifest.json \
     --offsets 0,30,64.1,95 [--duration 30] [--matcher dtw|rigid] \
     [--trace-out /tmp/trace.json]
 
 # Closed-loop ProPresenter trigger test (changes slides, restores after)
-.venv/bin/python tools/pp_trigger_test.py data/studio_manifest.json
+.venv/bin/python tools/pp_trigger_test.py data/incubus/drive/incubus_drive_manifest.json
 ```
 
 ## Package layout
@@ -64,7 +66,7 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 | Module | Key exports |
 |---|---|
 | `config.py` | All tunable constants — change defaults here |
-| `io.py` | `load_manifest`, `load_audio`, `finalize_slide_stops` |
+| `io.py` | `load_manifest`, `load_audio`, `finalize_slide_stops`, `song_slug`, `song_dir`, `load_song_meta` |
 | `embed.py` | `load_model` (layer-truncated, fp16), `embed_audio`, `embed_chunk_live`, `prep_inputs` |
 | `windows.py` | `strided_window_embeddings`, `pool_slide_embeddings` |
 | `transform.py` | `fit_global`, `apply_contrastive` (subtract global + L2-norm) |
@@ -123,6 +125,24 @@ Live (per 200ms chunk):
 
 ## Non-obvious design decisions
 
+**Per-song artifact naming (multi-song support).**  Manifests carry `artist`
++ `song_id`; `io.song_slug(artist, title)` builds the `<artist>_<title>` slug
+(`incubus_drive`) and `io.song_dir(artist, title)` the per-song directory
+(`data/<artist>/<song>/`, e.g. `data/incubus/drive/`).  EVERY per-song
+artifact lives in that directory and is named with the slug: manifest
+(`<slug>_manifest.json`, the `pp_to_manifest.py` default — `--artist` is
+required because ProPresenter annotations store only the title), embedding
+cache (`<slug>_cache.npz`, the `ppsync-preprocess` default, written beside
+the manifest), benchmark results (`bench_<slug>_<experiment>.json` by
+convention, with the song identity also embedded inside the JSON), and
+telemetry logs (first line is a `{"event": "meta", ...}` record with
+song/artist/slug; the webapp shows it in its header).  The whole `data/`
+tree is gitignored — caches are rebuildable, manifests regenerate from the
+annotation source.  The cache stores `song_id`/`artist`/`song_slug`; caches
+from before this convention fall back to the cache filename stem.  Never
+name a new song's files after the audio variant alone ("studio", "live") —
+that is exactly the ambiguity the slug removes.
+
 **Live and reference embeddings must come from the same computation.**  MERT
 frames depend on their attention context: frames from 30s chunks, 2s windows,
 and 0.2s chunks live in *different distributions* and cosine matching across
@@ -130,7 +150,7 @@ them fails completely (best match lands at the song's quiet outro).  Both
 sides therefore embed full 2s windows in single MERT calls.  Caching per-chunk
 live frames is also out: it makes the embedding depend on chunk phase, and a
 0.1s phase shift between live playback and the reference grid drops tracking
-from 100% to 4% (see `tools/benchmark.py` history in data/bench_studio*.json).
+from 100% to 4% (see `tools/benchmark.py` history in data/incubus/drive/bench_incubus_drive_studio*.json).
 
 **Buffer warm-up gating.**  No DTW, search-window anchoring, or HMM
 observation until the audio ring spans the full lookback AND the DTW buffer is

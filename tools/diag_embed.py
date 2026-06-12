@@ -9,7 +9,7 @@ nearest reference embedding lands:
   C. live-style: MERT on consecutive 0.2s chunks, frames concatenated
      (this is exactly what SongAligner._embed_chunk does)
 
-Usage: python tools/diag_embed.py data/studio_cache.npz --file <wav> --t 36 64 130
+Usage: python tools/diag_embed.py data/incubus/drive/incubus_drive_cache.npz --file <wav> --t 36 64 130
 """
 
 from __future__ import annotations

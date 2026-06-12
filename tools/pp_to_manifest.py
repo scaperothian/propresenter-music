@@ -15,8 +15,16 @@ So the two Chorus slides with three trigger times each become six chronological
 instances interleaved with the verses, giving a strictly increasing t_ref
 sequence the subsequence-DTW + left-to-right HMM can model.
 
+ProPresenter annotations carry the song title but not the artist, so the
+artist is supplied on the command line and written into the manifest.  The
+default output lands in the per-song data directory
+``data/<artist>/<title>/<artist>_<title>_manifest.json`` — every downstream
+artifact (cache, benchmark results, logs) shares that directory and slug, so
+files from different songs never collide and are identifiable at a glance.
+
 Usage:
-    python tools/pp_to_manifest.py studio_drive.json -o studio_manifest.json
+    python tools/pp_to_manifest.py studio_drive.json --artist "Incubus"
+    # -> data/incubus/drive/incubus_drive_manifest.json
 """
 
 from __future__ import annotations
@@ -26,13 +34,20 @@ import json
 import re
 from pathlib import Path
 
+from ppsync.io import song_dir, song_slug
+
 
 def _slug(text: str) -> str:
     """Short lowercase slug from a group name, e.g. 'Pre-Chorus 2' -> 'prechorus2'."""
     return re.sub(r"[^a-z0-9]+", "", text.lower()) or "slide"
 
 
-def convert(pp_json_path: Path, audio_override: str | None = None) -> dict:
+def convert(
+    pp_json_path: Path,
+    artist: str,
+    audio_override: str | None = None,
+    title_override: str | None = None,
+) -> dict:
     """Build a ppsync manifest dict from a ProPresenter annotation JSON."""
     pres = json.loads(pp_json_path.read_text())["presentation"]
 
@@ -70,7 +85,8 @@ def convert(pp_json_path: Path, audio_override: str | None = None) -> dict:
         )
 
     return {
-        "song_id": pres["id"].get("name", pp_json_path.stem),
+        "song_id": title_override or pres["id"].get("name", pp_json_path.stem),
+        "artist": artist,
         "ref_audio": audio,
         "pp_uuid": pres["id"].get("uuid", ""),
         "slides": slides,
@@ -80,7 +96,24 @@ def convert(pp_json_path: Path, audio_override: str | None = None) -> dict:
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="ProPresenter JSON -> ppsync manifest.")
     p.add_argument("pp_json", help="ProPresenter annotation JSON (e.g. studio_drive.json).")
-    p.add_argument("-o", "--output", default=None, help="Output manifest path.")
+    p.add_argument(
+        "--artist", required=True,
+        help="Song artist (ProPresenter annotations don't store it) — becomes "
+             "part of every downstream filename, e.g. --artist Incubus.",
+    )
+    p.add_argument(
+        "--title", default=None,
+        help="Override song title (default: presentation name).",
+    )
+    p.add_argument(
+        "-o", "--output", default=None,
+        help="Output manifest path (default: "
+             "<data-dir>/<artist>/<title>/<artist>_<title>_manifest.json).",
+    )
+    p.add_argument(
+        "--data-dir", default="data",
+        help="Base directory for the per-song data tree (default: data).",
+    )
     p.add_argument(
         "--audio", default=None,
         help="Override reference audio path (default: presentation.id.audio).",
@@ -88,10 +121,18 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
 
     pp_path = Path(args.pp_json)
-    manifest = convert(pp_path, audio_override=args.audio)
-    out = Path(args.output) if args.output else pp_path.with_name(pp_path.stem + "_manifest.json")
+    manifest = convert(pp_path, artist=args.artist,
+                       audio_override=args.audio, title_override=args.title)
+    slug = song_slug(manifest["artist"], manifest["song_id"])
+    if args.output:
+        out = Path(args.output)
+    else:
+        out_dir = song_dir(manifest["artist"], manifest["song_id"], args.data_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out = out_dir / f"{slug}_manifest.json"
     out.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
 
+    print(f"Song: {manifest['artist']} — {manifest['song_id']}  [slug: {slug}]")
     print(f"Wrote {out}  ({len(manifest['slides'])} slide instances)")
     for s in manifest["slides"]:
         first_line = s["lyrics"].splitlines()[0] if s["lyrics"] else ""

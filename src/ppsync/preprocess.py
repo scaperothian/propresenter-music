@@ -15,6 +15,9 @@ song_duration     scalar       total audio duration in seconds
 lookback_sec      scalar       window lookback used during preprocessing
 stride_sec        scalar       window stride used during preprocessing
 mert_layer        scalar int   which MERT layer was used
+song_id           str scalar   song title from the manifest (e.g. "Drive")
+artist            str scalar   artist from the manifest (e.g. "Incubus")
+song_slug         str scalar   artist_title filename slug (e.g. "incubus_drive")
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ import torch
 
 from .config import CHUNK_SEC, LOOKBACK_SEC, MERT_FP16, MERT_LAYER, STRIDE_SEC, TARGET_SR
 from .embed import embed_audio, load_model, prep_inputs
-from .io import finalize_slide_stops, load_audio, load_manifest
+from .io import finalize_slide_stops, load_audio, load_manifest, load_song_meta
 from .transform import apply_contrastive, fit_global
 from .windows import pool_slide_embeddings, strided_window_embeddings
 
@@ -173,7 +176,13 @@ def preprocess_song(
             device = "cpu"
 
     print(f"Loading manifest: {manifest_path}")
+    meta = load_song_meta(manifest_path)
     audio_path, slides = load_manifest(manifest_path)
+    artist_str = meta["artist"] or "(unknown artist)"
+    print(f"  Song: {artist_str} — {meta['song_id']}  [slug: {meta['slug']}]")
+    if not meta["artist"]:
+        print("  WARNING: manifest has no 'artist' field — add one so cache/log "
+              "filenames identify the song unambiguously.")
     print(f"  {len(slides)} slides, audio: {audio_path}")
 
     print(f"Loading audio…")
@@ -239,8 +248,7 @@ def preprocess_song(
     slide_pp_indices = np.array(
         [s.get("pp_slide_index", i) for i, s in enumerate(slides)], dtype=np.int32
     )
-    import json as _json
-    pp_uuid = _json.loads(Path(manifest_path).read_text()).get("pp_uuid", "")
+    pp_uuid = meta["pp_uuid"]
 
     for s in slides:
         raw_proto = pool_slide_embeddings(
@@ -273,6 +281,9 @@ def preprocess_song(
         "slide_pp_indices": slide_pp_indices,
         "pp_uuid": np.array(pp_uuid),
         "mert_fp16": np.bool_(MERT_FP16 and device != "cpu"),
+        "song_id": np.array(meta["song_id"]),
+        "artist": np.array(meta["artist"]),
+        "song_slug": np.array(meta["slug"]),
     }
     np.savez(str(output_path), **payload)
     print(f"\nCache saved to: {output_path}")

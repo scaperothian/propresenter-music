@@ -146,6 +146,11 @@ class SongAligner:
         else:
             self.slide_pp_indices = np.arange(len(self.slide_ids), dtype=np.int32)
         self.pp_uuid: str = str(cache["pp_uuid"]) if "pp_uuid" in cache else ""
+        # Song identity — older caches lack these; fall back to the cache
+        # filename so logs always carry SOME song identifier.
+        self.song_id: str = str(cache.get("song_id", "")) or Path(cache_path).stem
+        self.artist: str = str(cache.get("artist", ""))
+        self.song_slug: str = str(cache.get("song_slug", "")) or Path(cache_path).stem
         self.global_emb: np.ndarray = cache["global_emb"]      # [D]
         self.song_duration: float = float(cache["song_duration"])
         self.stride_sec: float = float(cache["stride_sec"])

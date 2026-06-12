@@ -42,7 +42,8 @@ def _preprocess_parser() -> argparse.ArgumentParser:
     p.add_argument("manifest", help="Path to slide manifest JSON.")
     p.add_argument(
         "--output", "-o", default=None,
-        help="Output .npz path (default: <manifest_stem>.npz beside the JSON).",
+        help="Output .npz path (default: <artist>_<title>_cache.npz beside the "
+             "JSON, e.g. incubus_drive_cache.npz).",
     )
     p.add_argument(
         "--lookback", type=float, default=LOOKBACK_SEC, metavar="SEC",
@@ -66,15 +67,18 @@ def _preprocess_parser() -> argparse.ArgumentParser:
 
 
 def preprocess_main(argv: list[str] | None = None) -> None:
+    from .io import load_song_meta
     from .preprocess import preprocess_song
 
     args = _preprocess_parser().parse_args(argv)
     manifest_path = Path(args.manifest)
-    output_path = (
-        Path(args.output)
-        if args.output
-        else manifest_path.with_suffix(".npz")
-    )
+    if args.output:
+        output_path = Path(args.output)
+    else:
+        # Name the cache by artist+title so caches for different songs are
+        # identifiable from the filename alone.
+        slug = load_song_meta(manifest_path)["slug"]
+        output_path = manifest_path.parent / f"{slug}_cache.npz"
     preprocess_song(
         manifest_path=manifest_path,
         output_path=output_path,
@@ -240,6 +244,9 @@ def align_main(argv: list[str] | None = None) -> None:
         chunk_sec=args.chunk,
     )
 
+    artist_str = f"{aligner.artist} — " if aligner.artist else ""
+    print(f"Song: {artist_str}{aligner.song_id}  [{aligner.song_slug}]")
+
     # The trigger drives the ACTIVE presentation (go_to_slide), so make sure
     # the right one is focused — slide indices are meaningless otherwise.
     if pp_controller is not None and aligner.pp_uuid:
@@ -274,6 +281,15 @@ def align_main(argv: list[str] | None = None) -> None:
     log_path = Path(args.log) if args.log else None
 
     with TelemetryLogger(log_path) as logger:
+        # First log line identifies the session's song so a telemetry file is
+        # self-describing (the webapp shows it; offline tooling can filter).
+        logger.log({
+            "event": "meta",
+            "song_id": aligner.song_id,
+            "artist": aligner.artist,
+            "song_slug": aligner.song_slug,
+            "cache": str(cache_path),
+        })
         try:
             for chunk, wall_t in source:
                 frame = aligner.process_chunk(chunk, chunk_wall_t=wall_t)
