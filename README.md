@@ -10,7 +10,7 @@ Given a studio reference recording and a slide manifest (slide IDs + timestamps)
 ```
 OFFLINE (once per song)
   Reference audio + manifest JSON
-    → MERT embeddings: one forward pass per sliding 2s window (50ms stride)
+    → MERT embeddings: one forward pass per sliding 2s window (100ms stride)
     → contrastive normalization (subtract song mean, L2)
     → per-slide prototype embeddings + HMM transition matrix
     → cached .npz
@@ -65,7 +65,7 @@ ProPresenter annotations carry the song title but not the artist, so `--artist` 
 ### 2. Preprocess (offline, once per song)
 
 ```bash
-.venv/bin/ppsync-preprocess data/incubus/drive/incubus_drive_manifest.json --stride 0.05
+.venv/bin/ppsync-preprocess data/incubus/drive/incubus_drive_manifest.json
 # → data/incubus/drive/incubus_drive_cache.npz  (default: <artist>_<title>_cache.npz)
 ```
 
@@ -139,7 +139,10 @@ ppsync-preprocess <manifest.json> [options]
   --output FILE      .npz output path (default: <artist>_<title>_cache.npz
                      beside the manifest, i.e. in the song's data/ directory)
   --lookback SEC     embedding window length        (default: 2.0s)
-  --stride SEC       reference window stride        (default: 0.02; 0.05 recommended)
+  --stride SEC       reference window stride        (default: 0.1, validated
+                     equal to 0.05 at half the preprocessing time)
+  --batch-size N     windows per MERT forward       (default: 16; no speedup
+                     beyond 16 on MPS, may help on CUDA)
   --layer N          MERT transformer layer         (default: 7)
   --device DEVICE    cpu | cuda | mps               (auto-detected)
 ```

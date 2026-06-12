@@ -85,7 +85,7 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 JSON manifest → load_manifest → slides (slide_id, t_ref, t_stop)
 Audio file   → load_audio    → [N] float32 @ 24kHz
 
-sliding_window_embeddings(wav, lookback=2s, stride=50ms)
+sliding_window_embeddings(wav, lookback=2s, stride=100ms)
   one MERT forward per [t-2s, t] window (batched), mean-pooled
   → raw_win_embs [N_ref, D]  +  ref_timestamps [N_ref]
 
