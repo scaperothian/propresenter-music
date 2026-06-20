@@ -79,7 +79,7 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 | `dtw.py` | `subsequence_dtw`, `align`, `topk_candidates`, `similarity_search` (live-band matcher) |
 | `hmm.py` | `HMMPredictor` — online forward filter |
 | `audio_capture.py` | `MicCapture` (native rate, drain), `FileCapture` |
-| `aligner.py` | `SongAligner`, `select_trigger_boundary` |
+| `aligner.py` | `SongAligner`, `select_trigger_boundary`, `same_onscreen_slide` |
 | `trigger.py` | `TriggerScheduler` — scheduled (timer-based) fires, ProPresenter mode |
 | `telemetry.py` | `TelemetryLogger` |
 | `cli.py` | `preprocess_main`, `align_main`, `eval_main` |
@@ -230,6 +230,20 @@ a wrong repeat).  Locking likewise requires a best-vs-runner-up margin
 fire pre-lock.  The DTW query buffer holds `DTW_LIVE_SEC=6s` but starts
 matching at `DTW_MIN_LIVE_SEC=4s`, so warm-up stays ~6s.
 
+**Same-slide jump suppression (`aligner.same_onscreen_slide`).**  The cost
+margin assumes the CORRECT position is at least locally competitive — true for
+studio-against-studio, but under heavy cross-performance divergence (a live
+band vs the studio cache) the correct spot can score *worse* than a wrong
+repeat, and the wrong repeat then beats the local re-alignment and clears the
+jump guard.  Extra guard: a confirmed jump is refused outright when its target
+shares `pp_slide_index` with the current anchor — another instance of the same
+ProPresenter slide (a repeated chorus) shows identical text, so the jump can
+only change tracking for the worse, never the display.  Hold position; the
+next DISTINGUISHING section (different `pp_slide_index`) re-acquires normally.
+This is what `pp_slide_index` already encodes, so it is free.  Observed:
+removed the live-Drive `11_chorus → 14_chorus` jump that skipped the bridge
+(studio fires unchanged — every real transition there is to a different slide).
+
 **Live-mean adaptation (mic/PA coloration).**  Live frames are contrastive-
 normalized against a blend of the cache's song mean and the live stream's own
 running mean (`LIVE_MEAN_ADAPT_SEC`).  Coloration shifts all live embeddings
@@ -264,5 +278,5 @@ trigger shows the current slide immediately.
 | `test_io.py` | manifest parsing (stops inferred, finalize, empty raises), audio resampling and stereo→mono |
 | `test_transform.py` | global mean, L2 norm after contrastive, single vector, zero-out identical rows |
 | `test_windows.py` | window count, timestamps monotone, short audio → empty, pool range, pool empty range |
-| `test_trigger.py` | fire gating/ordering/cooldown, skip pointer, ProPresenter index mapping via fake controller, boundary selection (catch-up/skips), scheduled fires (virtual + wall timers, re-arm, cancel-on-low-confidence, lag honesty) |
+| `test_trigger.py` | fire gating/ordering/cooldown, skip pointer, ProPresenter index mapping via fake controller, boundary selection (catch-up/skips), same-slide jump suppression (`same_onscreen_slide`), scheduled fires (virtual + wall timers, re-arm, cancel-on-low-confidence, lag honesty) |
 | `test_pp_live.py` | live ProPresenter integration (auto-skips when unreachable): go_to_slide round-trip, TriggerScheduler→controller delivery |
