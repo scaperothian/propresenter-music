@@ -188,7 +188,8 @@ src/ppsync/
   windows.py         strided window pooling
   transform.py       contrastive normalization
   preprocess.py      offline sliding-window embedding cache builder
-  dtw.py             rigid matcher (default) + subsequence DTW (live-band)
+  rigid.py           rigid matcher (default, 1:1 no-warp)
+  dtw.py             subsequence DTW matcher (live-band)
   hmm.py             online HMM forward filter
   audio_capture.py   mic (native-rate, backpressure-draining) + file sources
   aligner.py         pipeline: embedding → matcher → anchor → HMM → trigger
