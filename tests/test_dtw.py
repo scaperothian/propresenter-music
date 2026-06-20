@@ -78,6 +78,51 @@ def test_subsequence_dtw_empty_inputs():
 
 
 # ---------------------------------------------------------------------------
+# Step penalty (slope constraint)
+# ---------------------------------------------------------------------------
+
+def test_step_penalty_zero_is_plain_dtw():
+    """penalty=0 must be identical to the default (no-penalty) call."""
+    from ppsync.dtw import subsequence_dtw
+
+    ref = _rand_l2((80, 48))
+    query = ref[20:44].copy()
+    a = subsequence_dtw(query, ref)
+    b = subsequence_dtw(query, ref, step_penalty=0.0)
+    assert a == b
+
+
+def test_step_penalty_leaves_clean_diagonal_match_unchanged():
+    """A query that is an exact diagonal subsequence needs no warping, so the
+    free diagonal path is optimal regardless of penalty — end index and cost
+    must be invariant.  (This is why studio playback is unaffected.)"""
+    from ppsync.dtw import subsequence_dtw
+
+    ref = _rand_l2((100, 64))
+    query = ref[30:50].copy()
+    end0, cost0, _ = subsequence_dtw(query, ref, step_penalty=0.0)
+    end_hi, cost_hi, _ = subsequence_dtw(query, ref, step_penalty=1.0)
+    assert end_hi == end0
+    assert cost_hi == pytest.approx(cost0, abs=1e-6)
+
+
+def test_step_penalty_raises_cost_on_warped_match():
+    """When matching requires stalling (a repeated/stretched ref frame), the
+    penalty makes the warped path cost strictly more — the lever that pushes
+    the chosen path toward the diagonal."""
+    from ppsync.dtw import subsequence_dtw
+
+    ref = _rand_l2((60, 48))
+    # Query traverses ref 20..30 but stalls on frame 25 (repeated 4x) —
+    # plain DTW absorbs this with horizontal moves at zero extra cost.
+    idths = list(range(20, 26)) + [25, 25, 25] + list(range(26, 31))
+    query = ref[idths].copy()
+    _, cost0, _ = subsequence_dtw(query, ref, step_penalty=0.0)
+    _, cost_pen, _ = subsequence_dtw(query, ref, step_penalty=0.2)
+    assert cost_pen > cost0 + 0.1  # the stalls now cost real penalty
+
+
+# ---------------------------------------------------------------------------
 # similarity_search
 # ---------------------------------------------------------------------------
 
