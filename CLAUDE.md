@@ -51,11 +51,15 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 .venv/bin/python webapp/server.py \
     --log /tmp/ppsync_incubus_drive.jsonl   # localhost:8765
 
+# Offline analysis web UI (plots benchmark --trace-out files; localhost:8765/analysis)
+# overlays rigid vs DTW position-vs-time so the stalling effect is visible
+.venv/bin/python webapp/server.py --trace-dir /tmp/ppsync_traces
+
 # Start-offset re-sync benchmark (file-based, no mic; see tools/benchmark.py)
 .venv/bin/python tools/benchmark.py data/incubus/drive/incubus_drive_cache.npz \
     --file <song>.wav --manifest <song>_manifest.json \
     --offsets 0,30,64.1,95 [--duration 30] [--matcher dtw|rigid] \
-    [--trace-out /tmp/trace.json]
+    [--trace-out /tmp/ppsync_traces/run.json]   # self-describing {meta,frames}
 
 # Closed-loop ProPresenter trigger test (changes slides, restores after)
 .venv/bin/python tools/pp_trigger_test.py data/incubus/drive/incubus_drive_manifest.json
