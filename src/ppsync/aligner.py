@@ -91,6 +91,27 @@ def select_trigger_boundary(
     return skips, max(first_unfired, current)
 
 
+def same_onscreen_slide(
+    slide_t_refs: np.ndarray,
+    slide_pp_indices: np.ndarray,
+    t_a: float,
+    t_b: float,
+) -> bool:
+    """
+    True if reference times *t_a* and *t_b* land on slide instances that show
+    the SAME ProPresenter slide — i.e. the same ``pp_slide_index``, identical
+    on-screen text (a repeated chorus/refrain).  Used by the jump guard to
+    refuse a jump that would not change the display: there is no benefit to
+    moving the anchor to another instance of the slide already shown, only the
+    risk of landing on the wrong repeat and skipping the sections between them.
+    """
+    def pp_at(t: float) -> int:
+        i = max(0, int(np.searchsorted(slide_t_refs, t, side="right")) - 1)
+        return int(slide_pp_indices[i])
+
+    return pp_at(t_a) == pp_at(t_b)
+
+
 class SongAligner:
     """
     Full alignment pipeline for one song.
@@ -418,17 +439,30 @@ class SongAligner:
                         maxlen=self._steady_dtw_embs,
                     )
             elif refined_t - self._confirmed_t > JUMP_GUARD_SEC:
-                # Big forward jump: wrong-repeat matches look exactly like
-                # this, and a stable wrong match agrees with itself — so on
-                # top of consecutive agreement, the jump target must BEAT a
-                # local re-alignment near the current anchor by a cost margin.
-                self._jump_hist.append(refined_t)
-                if (len(self._jump_hist) == self._jump_hist.maxlen
-                        and max(self._jump_hist) - min(self._jump_hist) <= JUMP_AGREE_SEC
-                        and self._jump_beats_local(live_buffer, dtw_result)):
-                    obs_accepted = True
-                    self._advance_anchor(refined_t)
+                # Same on-screen slide?  A jump whose target shows the SAME
+                # ProPresenter slide as the current anchor (a repeated chorus/
+                # refrain — identical text on the same pp_slide_index) changes
+                # nothing on screen, so there is no benefit to taking it, only
+                # the risk of landing on the wrong repeat and skipping the real
+                # sections between them (observed: 11_chorus -> 14_chorus jumps
+                # the bridge).  Hold position; the next DISTINGUISHING section
+                # (a different pp_slide_index) is what legitimately re-acquires.
+                if same_onscreen_slide(self.slide_t_refs, self.slide_pp_indices,
+                                       refined_t, self._confirmed_t):
                     self._jump_hist.clear()
+                else:
+                    # Big forward jump to a different slide: wrong-repeat
+                    # matches look exactly like this, and a stable wrong match
+                    # agrees with itself — so on top of consecutive agreement,
+                    # the jump target must BEAT a local re-alignment near the
+                    # current anchor by a cost margin.
+                    self._jump_hist.append(refined_t)
+                    if (len(self._jump_hist) == self._jump_hist.maxlen
+                            and max(self._jump_hist) - min(self._jump_hist) <= JUMP_AGREE_SEC
+                            and self._jump_beats_local(live_buffer, dtw_result)):
+                        obs_accepted = True
+                        self._advance_anchor(refined_t)
+                        self._jump_hist.clear()
             else:
                 obs_accepted = True
                 self._jump_hist.clear()

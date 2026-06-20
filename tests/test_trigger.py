@@ -142,6 +142,39 @@ def test_position_behind_already_fired_aims_forward():
 
 
 # ---------------------------------------------------------------------------
+# Same on-screen slide detection (aligner.same_onscreen_slide) — jump guard
+# refuses jumps to another instance of the slide already shown.
+# ---------------------------------------------------------------------------
+
+from ppsync.aligner import same_onscreen_slide
+
+# Drive-shaped: choruses (pp 4 / pp 5) repeat; verses/bridge are distinct.
+PP_T_REFS = np.array([0.0, 30.0, 64.0, 74.0, 128.0, 138.0, 169.0, 194.0],
+                     dtype=np.float64)
+PP_IDX = np.array([0, 1, 4, 5, 4, 5, 10, 5], dtype=np.int32)
+#                  v   v  ch ch ch ch  br ch   (ch5 @ 74,138,194 all pp 5)
+
+
+def test_same_slide_true_for_repeated_chorus():
+    # 74s and 194s both land on pp_slide_index 5 (identical chorus text)
+    assert same_onscreen_slide(PP_T_REFS, PP_IDX, 80.0, 196.0) is True
+    # 138s (pp 5) vs 194s (pp 5) — the live Drive 11->14 case
+    assert same_onscreen_slide(PP_T_REFS, PP_IDX, 140.0, 195.0) is True
+
+
+def test_different_slide_false_for_distinct_sections():
+    # chorus (pp 5 @ 138) vs bridge (pp 10 @ 169) — a real progression
+    assert same_onscreen_slide(PP_T_REFS, PP_IDX, 140.0, 170.0) is False
+    # chorus line A (pp 4 @ 64) vs line B (pp 5 @ 74) — different text
+    assert same_onscreen_slide(PP_T_REFS, PP_IDX, 66.0, 76.0) is False
+
+
+def test_same_slide_handles_pre_first_boundary():
+    # times before the first boundary clamp to slide 0; equal to itself
+    assert same_onscreen_slide(PP_T_REFS, PP_IDX, -5.0, 10.0) is True
+
+
+# ---------------------------------------------------------------------------
 # Scheduled (timer-based) firing
 # ---------------------------------------------------------------------------
 
