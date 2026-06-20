@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ppsync offline analysis</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b24; --line: #232b38;
+    --text: #dbe4f0; --dim: #7b8798;
+    --good: #3fcf8e; --warn: #e8b73f; --bad: #e8643f; --accent: #5aa9ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .song { color: var(--dim); font-size: 13px; }
+  header a { color: var(--accent); font-size: 12px; margin-left: auto; text-decoration: none; }
+  header a:hover { text-decoration: underline; }
+
+  .traces {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 14px;
+  }
+  .traces .hint { color: var(--dim); font-size: 12px; margin-bottom: 8px; }
+  .traces label {
+    display: inline-flex; align-items: center; gap: 7px; margin: 4px 14px 4px 0;
+    font-size: 13px; cursor: pointer; font-variant-numeric: tabular-nums;
+  }
+  .traces .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .traces .meta { color: var(--dim); font-size: 11px; }
+
+  .plot {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 14px; position: relative;
+  }
+  .plot .title { color: var(--dim); font-size: 12px; text-transform: uppercase;
+                 letter-spacing: .06em; margin-bottom: 6px; }
+  canvas { width: 100%; display: block; }
+  /* Pin CSS heights so clientHeight is stable across redraws (otherwise the
+     devicePixelRatio buffer resize feeds back and the canvas grows). */
+  #main { height: 460px; }
+  #conf { height: 150px; }
+  #tip {
+    position: absolute; pointer-events: none; background: #0b0e13ee; color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 12px;
+    font-variant-numeric: tabular-nums; white-space: nowrap; display: none; z-index: 5;
+  }
+  #tip .k { color: var(--dim); }
+  .empty { color: var(--dim); padding: 40px 0; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ppsync offline analysis</h1>
+  <span class="song" id="song"></span>
+  <a href="/">live monitor →</a>
+</header>
+
+<div class="traces">
+  <div class="hint">Trace files from <code>benchmark.py --trace-out</code>. Select up to 4 to overlay.</div>
+  <div id="trace-list"><span class="empty" style="padding:8px 0">loading traces…</span></div>
+</div>
+
+<div class="plot">
+  <div class="title">alignment trajectory — estimated position (reference time) vs. true time.
+       dashed = ideal mapping (per-slide ground truth). flat segments = stalling.</div>
+  <canvas id="main" height="460"></canvas>
+  <div id="tip"></div>
+</div>
+
+<div class="plot">
+  <div class="title">matcher confidence vs. true time</div>
+  <canvas id="conf" height="150"></canvas>
+</div>
+
+<script>
+const PALETTE = ["#5aa9ff", "#e8b73f", "#3fcf8e", "#e8643f"];
+const CONF_THRESHOLD = 0.55;  // config.CONFIDENCE_THRESHOLD
+const loaded = {};            // name -> trace object
+const colorOf = {};           // name -> color
+let hoverX = null;            // canvas-space x of cursor (true-time axis), or null
+
+// ---- data loading ----------------------------------------------------
+async function init() {
+  const res = await fetch("/api/traces");
+  const data = await res.json();
+  const list = document.getElementById("trace-list");
+  const usable = data.traces.filter(t => t.meta);
+  if (!usable.length) {
+    list.innerHTML = `<span class="empty" style="padding:8px 0">No traces in `
+      + `<code>${data.trace_dir}</code>. Run `
+      + `<code>benchmark.py --trace-out &lt;file&gt;</code> there.</span>`;
+    return;
+  }
+  list.innerHTML = "";
+  usable.forEach((t, i) => {
+    const m = t.meta;
+    const lab = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.value = t.name;
+    cb.checked = i < 2;                      // preselect first two (rigid+dtw)
+    cb.onchange = () => toggle(t.name, cb.checked);
+    const sw = document.createElement("span");
+    sw.className = "swatch";
+    lab.append(cb, sw, document.createTextNode(
+      `${m.matcher}  `), Object.assign(document.createElement("span"),
+      { className: "meta", textContent:
+        `${m.artist} ${m.song_id} · ${m.audio_file} · ${t.frames} frames` }));
+    lab._swatch = sw; lab._name = t.name;
+    list.appendChild(lab);
+  });
+  // load the preselected ones
+  for (const t of usable.slice(0, 2)) await load(t.name);
+  assignColors();
+  draw();
+}
+
+async function load(name) {
+  if (loaded[name]) return;
+  const res = await fetch("/api/trace?name=" + encodeURIComponent(name));
+  loaded[name] = await res.json();
+}
+
+function assignColors() {
+  let i = 0;
+  for (const lab of document.querySelectorAll("#trace-list label")) {
+    const cb = lab.querySelector("input");
+    if (cb.checked && loaded[lab._name]) {
+      colorOf[lab._name] = PALETTE[i % PALETTE.length];
+      lab._swatch.style.background = colorOf[lab._name];
+      i++;
+    } else {
+      lab._swatch.style.background = "transparent";
+    }
+  }
+}
+
+async function toggle(name, on) {
+  if (on) await load(name);
+  assignColors();
+  draw();
+}
+
+function selectedNames() {
+  return [...document.querySelectorAll("#trace-list label")]
+    .filter(l => l.querySelector("input").checked && loaded[l._name])
+    .map(l => l._name);
+}
+
+// ---- drawing helpers -------------------------------------------------
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  return { ctx, w: cssW, h: cssH };
+}
+
+function niceStep(span, target) {
+  const raw = span / target;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const cands = [1, 2, 5, 10].map(c => c * pow);
+  return cands.find(c => raw <= c) || cands[cands.length - 1];
+}
+
+// ---- main plot -------------------------------------------------------
+function draw() {
+  const canvas = document.getElementById("main");
+  const { ctx, w, h } = setupCanvas(canvas);
+  const names = selectedNames();
+  const M = { l: 66, r: 14, t: 10, b: 46 };
+  const X0 = M.l, X1 = w - M.r, Y0 = h - M.b, Y1 = M.t;
+
+  if (!names.length) {
+    ctx.fillStyle = "#7b8798"; ctx.font = "13px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("Select a trace above to plot.", w / 2, h / 2);
+    return;
+  }
+
+  // axis ranges from selected data + meta
+  const any = loaded[names[0]].meta;
+  document.getElementById("song").textContent =
+    `${any.artist} — ${any.song_id}  ·  vs ${any.audio_file}`;
+  let xMax = 1, yMax = 1;
+  for (const n of names) {
+    const o = loaded[n];
+    for (const f of o.frames) {
+      if (f.true_t > xMax) xMax = f.true_t;
+      if (f.dtw_refined_t > yMax) yMax = f.dtw_refined_t;
+    }
+    for (const s of o.meta.slide_refs) if (s.t > yMax) yMax = s.t;
+    for (const g of o.meta.ground_truth) if (g.t > xMax) xMax = g.t;
+  }
+  xMax = Math.ceil(xMax / 10) * 10; yMax = Math.ceil(yMax / 10) * 10;
+  const xPix = t => X0 + (t / xMax) * (X1 - X0);
+  const yPix = t => Y0 - (t / yMax) * (Y0 - Y1);
+
+  // grid + axis ticks
+  ctx.font = "10px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  const xs = niceStep(xMax, 10);
+  ctx.strokeStyle = "#232b38"; ctx.fillStyle = "#7b8798"; ctx.lineWidth = 1;
+  for (let t = 0; t <= xMax; t += xs) {
+    ctx.beginPath(); ctx.moveTo(xPix(t), Y0); ctx.lineTo(xPix(t), Y1); ctx.stroke();
+    ctx.fillText(t + "s", xPix(t), Y0 + 5);
+  }
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  const ys = niceStep(yMax, 8);
+  for (let t = 0; t <= yMax; t += ys) {
+    ctx.beginPath(); ctx.moveTo(X0, yPix(t)); ctx.lineTo(X1, yPix(t)); ctx.stroke();
+    ctx.fillText(t + "s", X0 - 6, yPix(t));
+  }
+
+  // axis titles
+  ctx.fillStyle = "#9aa6b6"; ctx.font = "11px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+  ctx.fillText("true time — live audio (s)", (X0 + X1) / 2, h - 2);
+  ctx.save();
+  ctx.translate(15, (Y0 + Y1) / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textBaseline = "middle";
+  ctx.fillText("estimated position — reference time (s)", 0, 0);
+  ctx.restore();
+
+  // live ground-truth boundary lines (vertical) + studio ref boundaries (horizontal)
+  ctx.strokeStyle = "#2c3647";
+  ctx.setLineDash([2, 4]);
+  for (const g of any.ground_truth) {
+    ctx.beginPath(); ctx.moveTo(xPix(g.t), Y0); ctx.lineTo(xPix(g.t), Y1); ctx.stroke();
+  }
+  for (const s of any.slide_refs) {
+    ctx.beginPath(); ctx.moveTo(X0, yPix(s.t)); ctx.lineTo(X1, yPix(s.t)); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // ideal mapping line: pair each slide id (live gt time, studio ref time)
+  const refById = {}; any.slide_refs.forEach(s => refById[s.id] = s.t);
+  const ideal = any.ground_truth
+    .filter(g => g.id in refById)
+    .map(g => ({ x: g.t, y: refById[g.id] }))
+    .sort((a, b) => a.x - b.x);
+  if (ideal.length) {
+    ctx.strokeStyle = "#8a93a3"; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(xPix(ideal[0].x), yPix(ideal[0].y));
+    for (const p of ideal) ctx.lineTo(xPix(p.x), yPix(p.y));
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // trace trajectories + trigger markers
+  for (const n of names) {
+    const o = loaded[n], col = colorOf[n];
+    ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.beginPath();
+    let started = false;
+    for (const f of o.frames) {
+      const px = xPix(f.true_t), py = yPix(f.dtw_refined_t);
+      if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    // trigger fires
+    ctx.fillStyle = col;
+    for (const f of o.frames) {
+      if (f.triggered) {
+        ctx.beginPath();
+        ctx.arc(xPix(f.true_t), yPix(f.dtw_refined_t), 3.2, 0, 6.2832);
+        ctx.fill();
+      }
+    }
+  }
+
+  // legend
+  ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.font = "11px sans-serif";
+  let ly = Y1 + 8;
+  ctx.fillStyle = "#8a93a3";
+  ctx.fillText("– – ideal mapping", X1 - 130, ly); ly += 15;
+  for (const n of names) {
+    ctx.fillStyle = colorOf[n];
+    ctx.fillRect(X1 - 130, ly - 4, 16, 3);
+    ctx.fillText("  " + loaded[n].meta.matcher + "  ● trigger", X1 - 120, ly);
+    ly += 15;
+  }
+
+  drawHover(ctx, names, { X0, X1, Y0, Y1, xMax, yMax, xPix, yPix });
+  drawConf();
+}
+
+// slide instance number from its id, e.g. "05_chorus" -> "05"
+function slideNum(id) {
+  const m = String(id ?? "").match(/^(\d+)/);
+  return m ? m[1] : (id ?? "—");
+}
+// ground-truth slide active at true time t (last boundary at/before t)
+function trueSlideAt(meta, t) {
+  let cur = null;
+  for (const g of meta.ground_truth) { if (g.t <= t) cur = g; else break; }
+  return cur;
+}
+// most recent trigger fired at/before true time t for one trace
+function lastTriggerAt(frames, t) {
+  let last = null;
+  for (const f of frames) { if (f.true_t > t) break; if (f.triggered) last = f; }
+  return last;
+}
+
+// ---- hover cursor + readout -----------------------------------------
+function drawHover(ctx, names, g) {
+  if (hoverX === null || hoverX < g.X0 || hoverX > g.X1) {
+    document.getElementById("tip").style.display = "none";
+    return;
+  }
+  const tTrue = ((hoverX - g.X0) / (g.X1 - g.X0)) * g.xMax;
+  ctx.strokeStyle = "#3a455a"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(hoverX, g.Y1); ctx.lineTo(hoverX, g.Y0); ctx.stroke();
+
+  // ground-truth slide that *should* be showing at this true time
+  const meta = loaded[names[0]].meta;
+  const ts = trueSlideAt(meta, tTrue);
+  let rows = `<div><span class="k">true</span> ${tTrue.toFixed(1)}s`
+    + `&nbsp;&nbsp;<span class="k">true slide</span> `
+    + `${ts ? slideNum(ts.id) + " · " + ts.id : "—"}</div>`;
+
+  for (const n of names) {
+    const o = loaded[n];
+    const f = nearestFrame(o.frames, tTrue);
+    if (!f) continue;
+    rows += `<div><span style="color:${colorOf[n]}">${o.meta.matcher}</span> pos `
+      + `${f.dtw_refined_t.toFixed(1)}s · conf ${(f.dtw_confidence ?? 0).toFixed(2)}`
+      + ` · at <span class="k">slide</span> ${f.hmm_current_slide_id ?? "—"}</div>`;
+    // what this matcher has actually fired by now (the slide on screen)
+    const tr = lastTriggerAt(o.frames, tTrue);
+    if (tr) {
+      const fired = slideNum(tr.triggered_slide_id);
+      const onWrong = ts && fired !== slideNum(ts.id);
+      rows += `<div style="margin-left:12px">↳ fired <b>${fired}</b> · `
+        + `${tr.triggered_slide_id} @ ${(tr.trigger_fire_t ?? tr.true_t).toFixed(1)}s`
+        + (onWrong ? ` <span style="color:#e8643f">≠ true</span>` : ``) + `</div>`;
+      // ring the fired point on the trajectory
+      ctx.strokeStyle = colorOf[n]; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(g.xPix(tr.true_t), g.yPix(tr.dtw_refined_t), 6, 0, 6.2832);
+      ctx.stroke();
+    } else {
+      rows += `<div style="margin-left:12px">↳ fired —</div>`;
+    }
+  }
+  const tip = document.getElementById("tip");
+  tip.innerHTML = rows;
+  tip.style.display = "block";
+  tip.style.left = Math.min(hoverX + 14, g.X1 - 150) + "px";
+  tip.style.top = (g.Y1 + 30) + "px";
+}
+
+function nearestFrame(frames, tTrue) {
+  // frames are time-ordered in true_t; binary search nearest
+  let lo = 0, hi = frames.length - 1;
+  if (hi < 0) return null;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (frames[mid].true_t < tTrue) lo = mid + 1; else hi = mid;
+  }
+  const a = frames[Math.max(0, lo - 1)], b = frames[lo];
+  return Math.abs(a.true_t - tTrue) <= Math.abs(b.true_t - tTrue) ? a : b;
+}
+
+// ---- confidence panel ------------------------------------------------
+function drawConf() {
+  const canvas = document.getElementById("conf");
+  const { ctx, w, h } = setupCanvas(canvas);
+  const names = selectedNames();
+  const M = { l: 66, r: 14, t: 8, b: 30 };
+  const X0 = M.l, X1 = w - M.r, Y0 = h - M.b, Y1 = M.t;
+  if (!names.length) return;
+
+  let xMax = 1;
+  for (const n of names) for (const f of loaded[n].frames) if (f.true_t > xMax) xMax = f.true_t;
+  xMax = Math.ceil(xMax / 10) * 10;
+  const xPix = t => X0 + (t / xMax) * (X1 - X0);
+  const yPix = v => Y0 - v * (Y0 - Y1);
+
+  // frame + 0/1 axis + threshold
+  ctx.strokeStyle = "#232b38"; ctx.lineWidth = 1; ctx.fillStyle = "#7b8798";
+  ctx.font = "10px sans-serif"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (const v of [0, 0.5, 1]) {
+    ctx.beginPath(); ctx.moveTo(X0, yPix(v)); ctx.lineTo(X1, yPix(v)); ctx.stroke();
+    ctx.fillText(v.toFixed(1), X0 - 6, yPix(v));
+  }
+  ctx.strokeStyle = "#4a3a1f"; ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(X0, yPix(CONF_THRESHOLD)); ctx.lineTo(X1, yPix(CONF_THRESHOLD)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#7b8798"; ctx.textAlign = "left";
+  ctx.fillText("conf threshold " + CONF_THRESHOLD, X0 + 4, yPix(CONF_THRESHOLD) - 7);
+
+  // axis titles
+  ctx.fillStyle = "#9aa6b6"; ctx.font = "11px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+  ctx.fillText("true time — live audio (s)", (X0 + X1) / 2, h - 1);
+  ctx.save();
+  ctx.translate(15, (Y0 + Y1) / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textBaseline = "middle";
+  ctx.fillText("confidence", 0, 0);
+  ctx.restore();
+
+  for (const n of names) {
+    ctx.strokeStyle = colorOf[n]; ctx.lineWidth = 1.4; ctx.beginPath();
+    let started = false;
+    for (const f of loaded[n].frames) {
+      const px = xPix(f.true_t), py = yPix(Math.max(0, Math.min(1, f.dtw_confidence ?? 0)));
+      if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+  if (hoverX !== null && hoverX >= X0 && hoverX <= X1) {
+    ctx.strokeStyle = "#3a455a"; ctx.beginPath();
+    ctx.moveTo(hoverX, Y1); ctx.lineTo(hoverX, Y0); ctx.stroke();
+  }
+}
+
+// ---- events ----------------------------------------------------------
+const mainCanvas = document.getElementById("main");
+mainCanvas.addEventListener("mousemove", e => {
+  const r = mainCanvas.getBoundingClientRect();
+  hoverX = e.clientX - r.left;
+  draw();
+});
+mainCanvas.addEventListener("mouseleave", () => { hoverX = null; draw(); });
+window.addEventListener("resize", draw);
+init();
+</script>
+</body>
+</html>

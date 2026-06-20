@@ -145,8 +145,33 @@ def run_offset(
     hits = len(matched_ids & reachable_ids)
 
     if trace_path is not None:
-        trace_path.write_text(json.dumps(trace, indent=1))
-        print(f"  wrote {len(trace)} frames to {trace_path}")
+        # Self-describing trace: the per-frame data plus everything the offline
+        # analysis view needs to plot it (which matcher/song produced it, the
+        # studio slide boundaries on the reference-time axis, and the live
+        # ground-truth boundaries on the real-time axis).
+        trace_obj = {
+            "meta": {
+                "matcher": aligner.matcher,
+                "artist": aligner.artist,
+                "song_id": aligner.song_id,
+                "song_slug": aligner.song_slug,
+                "audio_file": audio_path.name,
+                "offset": offset,
+                "duration": duration,
+                "warmup_sec": warmup_sec,
+                "song_duration": aligner.song_duration,
+                # studio reference boundaries (the y-axis / position estimate)
+                "slide_refs": [
+                    {"id": str(sid), "t": float(t)}
+                    for sid, t in zip(aligner.slide_ids, aligner.slide_t_refs)
+                ],
+                # live ground-truth boundaries (the x-axis / true time)
+                "ground_truth": [{"id": str(sid), "t": float(t)} for sid, t in gt],
+            },
+            "frames": trace,
+        }
+        trace_path.write_text(json.dumps(trace_obj, indent=1))
+        print(f"  wrote {len(trace)} frames + meta to {trace_path}")
 
     dtw_a = np.array(dtw_errs) if dtw_errs else np.array([np.nan])
     hmm_a = np.array(hmm_errs) if hmm_errs else np.array([np.nan])

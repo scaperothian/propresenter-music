@@ -99,7 +99,7 @@ embeddings for coarse matching, and the HMM transition matrix derived from slide
     [--json-out data/incubus/drive/bench_incubus_drive_<experiment>.json]
 ```
 
-Replays the file from each start offset and prints a per-slide report (target time, fired time, verdict) plus tracking error and per-chunk latency against the real-time budget. `--duration` tests partial-song slices; `--trace-out` dumps per-frame telemetry for debugging.
+Replays the file from each start offset and prints a per-slide report (target time, fired time, verdict) plus tracking error and per-chunk latency against the real-time budget. `--duration` tests partial-song slices; `--trace-out` writes a self-describing per-frame trace (`{meta, frames}`) for the offline analysis view (`webapp/server.py --trace-dir … → /analysis`), which plots position-vs-time so the DTW stalling effect is visible and rigid/DTW runs overlay.
 
 ### 5. Verify ProPresenter triggering end to end
 
