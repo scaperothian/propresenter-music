@@ -61,10 +61,10 @@ from .config import (
     TRIGGER_CONFIDENCE_MIN,
 )
 from .dtw import align as dtw_align
-from .dtw import rigid_align
 from .embed import embed_chunk_live
 from .hmm import HMMPredictor
 from .preprocess import load_cache
+from .rigid import rigid_align
 from .trigger import TriggerScheduler
 
 

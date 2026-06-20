@@ -71,7 +71,8 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 | `windows.py` | `strided_window_embeddings`, `pool_slide_embeddings` |
 | `transform.py` | `fit_global`, `apply_contrastive` (subtract global + L2-norm) |
 | `preprocess.py` | `preprocess_song`, `sliding_window_embeddings`, `load_cache`, `build_hmm_transition` |
-| `dtw.py` | `rigid_align` (default matcher), `subsequence_dtw`, `align`, `topk_candidates`, `similarity_search` |
+| `rigid.py` | `rigid_align` — default matcher (1:1 no-warp) |
+| `dtw.py` | `subsequence_dtw`, `align`, `topk_candidates`, `similarity_search` (live-band matcher) |
 | `hmm.py` | `HMMPredictor` — online forward filter |
 | `audio_capture.py` | `MicCapture` (native rate, drain), `FileCapture` |
 | `aligner.py` | `SongAligner`, `select_trigger_boundary` |
@@ -105,8 +106,8 @@ Live (per 200ms chunk):
   cosine(pooled_norm, slide_protos) → coarse_slide_idx, coarse_conf
 
   matcher (MATCHER config / --matcher):
-    rigid_align — 1:1 time mapping, mean cosine per offset  (default)
-    align       — top-K cosine candidates + subsequence DTW (live-band)
+    rigid.rigid_align — 1:1 time mapping, mean cosine per offset  (default)
+    dtw.align         — top-K cosine candidates + subsequence DTW (live-band)
     → refined_t, confidence, cost_margin
 
   anchor logic: initial lock (consistency + cost margin) / jump guard
@@ -193,7 +194,7 @@ requests run on a daemon thread — a slow ProPresenter must not stall the
 **Rigid matcher is the default; DTW is for the live-band mode.**  Playback of
 a fixed recording does not warp time — only the acoustic channel differs — so
 the matcher slides the live query across the reference with the time mapping
-FIXED at 1:1 (`dtw.rigid_align`, `MATCHER="rigid"`, benchmark `--matcher`).
+FIXED at 1:1 (`rigid.rigid_align`, `MATCHER="rigid"`, benchmark `--matcher`).
 DTW's path flexibility absorbs acoustic mismatch by bending time, which shows
 up as 0.5-1s position lag and wrong-repeat jumps under mic/PA coloration;
 rigid matching made colored-audio results identical to clean-studio results
@@ -253,7 +254,8 @@ trigger shows the current slide immediately.
 
 | File | What it covers |
 |---|---|
-| `test_dtw.py` | cosine distance, subsequence DTW, similarity search bounds, `align()` keys, `rigid_align` (exact subsequence, empty window) |
+| `test_dtw.py` | cosine distance, subsequence DTW, similarity search bounds, `align()` keys |
+| `test_rigid.py` | `rigid_align` (exact subsequence, empty window) |
 | `test_hmm.py` | transition matrix (row sums, left-to-right, absorbing last state), `update()` keys, state probs sum to 1, convergence, drift, reset, trigger confidence near boundary |
 | `test_io.py` | manifest parsing (stops inferred, finalize, empty raises), audio resampling and stereo→mono |
 | `test_transform.py` | global mean, L2 norm after contrastive, single vector, zero-out identical rows |
