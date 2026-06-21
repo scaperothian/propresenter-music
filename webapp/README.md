@@ -4,9 +4,11 @@ One stdlib server, two surfaces — no extra dependencies.
 
 - **Live monitor** (`/`): last triggered slide in a big box, plus sparklines
   for DTW / MERT / HMM confidence, song position, and per-chunk latency.
-- **Offline analysis** (`/analysis`): plots the alignment trajectory from
-  benchmark trace files — estimated position vs. true time — so the DTW
-  *stalling* effect is visible and rigid/DTW runs can be overlaid.
+- **Offline analysis** (`/analysis`): three stacked panels on a shared
+  true-time axis from benchmark trace files — position trajectory (DTW
+  *stalling* shows as flat segments), matcher confidence, and HMM trigger
+  confidence — with ground-truth boundaries marked; overlay any number of
+  rigid/DTW runs.
 
 ## Run
 
@@ -49,8 +51,18 @@ for >3s — aligner stopped or fell over).
 `{meta, frames}` trace (matcher, song, studio slide boundaries, live
 ground-truth boundaries, per-frame position/confidence/triggers).  `server.py`
 lists the trace dir at `/api/traces` and serves each file at `/api/trace`;
-`analysis.html` plots, per selected trace, the estimated position
-(`dtw_refined_t`, reference time) against true time.  A dashed line shows the
-ideal mapping (each slide's live time → its reference time); where a matcher's
-curve goes flat against that rising ideal, it is **stalling**.  Overlay the
-rigid and DTW traces of the same run to compare.
+`analysis.html` renders three stacked panels sharing one true-time x-axis:
+
+1. **Position trajectory** — estimated position (`dtw_refined_t`, reference
+   time) vs. true time.  A dashed line is the ideal mapping (each slide's live
+   time → its reference time); where a matcher's curve goes flat against that
+   rising ideal, it is **stalling**.  Trigger fires are dotted on the curve.
+2. **Matcher confidence** (`dtw_confidence`) with its 0.55 gate.
+3. **HMM trigger confidence** (`hmm_trigger_confidence`) with its 0.60 gate.
+
+Solid white verticals mark every ground-truth slide boundary in all three
+panels, so you can read where each confidence sits relative to its gate at a
+boundary.  Overlay any number of traces (each a distinct, non-repeating color,
+labelled by filename stem) — e.g. rigid vs. DTW, or a DTW step-penalty sweep —
+and hover for a per-trace readout (position, m-conf, h-conf, true vs. fired
+slide).
