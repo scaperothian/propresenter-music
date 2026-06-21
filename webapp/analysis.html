@@ -43,6 +43,7 @@
      devicePixelRatio buffer resize feeds back and the canvas grows). */
   #main { height: 460px; }
   #conf { height: 150px; }
+  #hmmconf { height: 150px; }
   #tip {
     position: absolute; pointer-events: none; background: #0b0e13ee; color: var(--text);
     border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 12px;
@@ -60,7 +61,7 @@
 </header>
 
 <div class="traces">
-  <div class="hint">Trace files from <code>benchmark.py --trace-out</code>. Select up to 4 to overlay.</div>
+  <div class="hint">Trace files from <code>benchmark.py --trace-out</code>. Select any number to overlay.</div>
   <div id="trace-list"><span class="empty" style="padding:8px 0">loading traces…</span></div>
 </div>
 
@@ -72,13 +73,26 @@
 </div>
 
 <div class="plot">
-  <div class="title">matcher confidence vs. true time</div>
+  <div class="title">matcher confidence vs. true time — acoustic match quality (gate 0.55)</div>
   <canvas id="conf" height="150"></canvas>
 </div>
 
+<div class="plot">
+  <div class="title">HMM trigger confidence vs. true time — boundary-imminent (gate 0.60)</div>
+  <canvas id="hmmconf" height="150"></canvas>
+</div>
+
 <script>
-const PALETTE = ["#5aa9ff", "#e8b73f", "#3fcf8e", "#e8643f"];
-const CONF_THRESHOLD = 0.55;  // config.CONFIDENCE_THRESHOLD
+const PALETTE = ["#5aa9ff", "#e8b73f", "#3fcf8e", "#e8643f", "#b98cff", "#5fd0c8"];
+// Distinct color for any trace index — palette first, then golden-angle hues
+// so colors never repeat no matter how many traces are overlaid.
+function colorForIndex(i) {
+  if (i < PALETTE.length) return PALETTE[i];
+  const hue = (i * 137.508 + 25) % 360;
+  return `hsl(${hue.toFixed(1)}, 68%, 62%)`;
+}
+const CONF_THRESHOLD = 0.55;  // config.CONFIDENCE_THRESHOLD (matcher gate)
+const HMM_THRESHOLD = 0.60;   // config.TRIGGER_CONFIDENCE_MIN (HMM trigger gate)
 const loaded = {};            // name -> trace object
 const colorOf = {};           // name -> color
 let hoverX = null;            // canvas-space x of cursor (true-time axis), or null
@@ -106,9 +120,9 @@ async function init() {
     const sw = document.createElement("span");
     sw.className = "swatch";
     lab.append(cb, sw, document.createTextNode(
-      `${m.matcher}  `), Object.assign(document.createElement("span"),
+      `${traceLabel(t.name)}  `), Object.assign(document.createElement("span"),
       { className: "meta", textContent:
-        `${m.artist} ${m.song_id} · ${m.audio_file} · ${t.frames} frames` }));
+        `${m.matcher} · ${m.artist} ${m.song_id} · ${m.audio_file} · ${t.frames}f` }));
     lab._swatch = sw; lab._name = t.name;
     list.appendChild(lab);
   });
@@ -129,7 +143,7 @@ function assignColors() {
   for (const lab of document.querySelectorAll("#trace-list label")) {
     const cb = lab.querySelector("input");
     if (cb.checked && loaded[lab._name]) {
-      colorOf[lab._name] = PALETTE[i % PALETTE.length];
+      colorOf[lab._name] = colorForIndex(i);
       lab._swatch.style.background = colorOf[lab._name];
       i++;
     } else {
@@ -166,6 +180,18 @@ function niceStep(span, target) {
   const pow = Math.pow(10, Math.floor(Math.log10(raw)));
   const cands = [1, 2, 5, 10].map(c => c * pow);
   return cands.find(c => raw <= c) || cands[cands.length - 1];
+}
+
+// Solid white verticals at each ground-truth slide boundary — a shared time
+// reference drawn in every panel so you can read where the confidence traces
+// sit relative to the gates at each boundary.
+function drawBoundaries(ctx, gt, xPix, yTop, yBot) {
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.62)"; ctx.lineWidth = 1; ctx.setLineDash([]);
+  for (const g of gt) {
+    ctx.beginPath(); ctx.moveTo(xPix(g.t), yBot); ctx.lineTo(xPix(g.t), yTop); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 // ---- main plot -------------------------------------------------------
@@ -225,16 +251,14 @@ function draw() {
   ctx.fillText("estimated position — reference time (s)", 0, 0);
   ctx.restore();
 
-  // live ground-truth boundary lines (vertical) + studio ref boundaries (horizontal)
-  ctx.strokeStyle = "#2c3647";
-  ctx.setLineDash([2, 4]);
-  for (const g of any.ground_truth) {
-    ctx.beginPath(); ctx.moveTo(xPix(g.t), Y0); ctx.lineTo(xPix(g.t), Y1); ctx.stroke();
-  }
+  // studio ref boundaries (horizontal, faint dashed)
+  ctx.strokeStyle = "#2c3647"; ctx.setLineDash([2, 4]);
   for (const s of any.slide_refs) {
     ctx.beginPath(); ctx.moveTo(X0, yPix(s.t)); ctx.lineTo(X1, yPix(s.t)); ctx.stroke();
   }
   ctx.setLineDash([]);
+  // ground-truth slide boundaries (vertical, solid white) — shared reference
+  drawBoundaries(ctx, any.ground_truth, xPix, Y1, Y0);
 
   // ideal mapping line: pair each slide id (live gt time, studio ref time)
   const refById = {}; any.slide_refs.forEach(s => refById[s.id] = s.t);
@@ -270,22 +294,32 @@ function draw() {
     }
   }
 
-  // legend
+  // legend — lower-right (data trends up-and-right, so this corner is empty)
   ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.font = "11px sans-serif";
-  let ly = Y1 + 8;
+  const lh = 15, lw = 180;
+  const nLines = names.length + 1;
+  const lx = X1 - lw;
+  let ly = Y0 - 8 - (nLines - 1) * lh;
   ctx.fillStyle = "#8a93a3";
-  ctx.fillText("– – ideal mapping", X1 - 130, ly); ly += 15;
+  ctx.fillText("– – ideal mapping", lx, ly); ly += lh;
   for (const n of names) {
     ctx.fillStyle = colorOf[n];
-    ctx.fillRect(X1 - 130, ly - 4, 16, 3);
-    ctx.fillText("  " + loaded[n].meta.matcher + "  ● trigger", X1 - 120, ly);
-    ly += 15;
+    ctx.fillRect(lx, ly - 4, 16, 3);
+    ctx.fillText("  " + traceLabel(n) + "  ● trigger", lx + 4, ly);
+    ly += lh;
   }
 
   drawHover(ctx, names, { X0, X1, Y0, Y1, xMax, yMax, xPix, yPix });
-  drawConf();
+  // shared x-axis (same xMax + margins) so the two confidence panels line up
+  drawConfPanel("conf", "dtw_confidence", CONF_THRESHOLD, "matcher conf", xMax, names, false);
+  drawConfPanel("hmmconf", "hmm_trigger_confidence", HMM_THRESHOLD, "HMM conf", xMax, names, true);
 }
 
+// short label for a trace from its filename: drop ".json" and the "_off<n>"
+// offset suffix, so "studio_dtw_pen01_off0.json" -> "studio_dtw_pen01"
+function traceLabel(name) {
+  return String(name).replace(/\.json$/, "").replace(/_off\d+(\.\d+)?$/, "");
+}
 // slide instance number from its id, e.g. "05_chorus" -> "05"
 function slideNum(id) {
   const m = String(id ?? "").match(/^(\d+)/);
@@ -326,7 +360,8 @@ function drawHover(ctx, names, g) {
     const f = nearestFrame(o.frames, tTrue);
     if (!f) continue;
     rows += `<div><span style="color:${colorOf[n]}">${o.meta.matcher}</span> pos `
-      + `${f.dtw_refined_t.toFixed(1)}s · conf ${(f.dtw_confidence ?? 0).toFixed(2)}`
+      + `${f.dtw_refined_t.toFixed(1)}s · <span class="k">m-conf</span> ${(f.dtw_confidence ?? 0).toFixed(2)}`
+      + ` · <span class="k">h-conf</span> ${(f.hmm_trigger_confidence ?? 0).toFixed(2)}`
       + ` · at <span class="k">slide</span> ${f.hmm_current_slide_id ?? "—"}</div>`;
     // what this matcher has actually fired by now (the slide on screen)
     const tr = lastTriggerAt(o.frames, tTrue);
@@ -364,55 +399,67 @@ function nearestFrame(frames, tTrue) {
   return Math.abs(a.true_t - tTrue) <= Math.abs(b.true_t - tTrue) ? a : b;
 }
 
-// ---- confidence panel ------------------------------------------------
-function drawConf() {
-  const canvas = document.getElementById("conf");
+// ---- confidence panel (one 0..1 series; shares the main plot's x-axis) ----
+function drawConfPanel(canvasId, field, threshold, ylabel, xMax, names, showXAxis) {
+  const canvas = document.getElementById(canvasId);
   const { ctx, w, h } = setupCanvas(canvas);
-  const names = selectedNames();
-  const M = { l: 66, r: 14, t: 8, b: 30 };
-  const X0 = M.l, X1 = w - M.r, Y0 = h - M.b, Y1 = M.t;
   if (!names.length) return;
-
-  let xMax = 1;
-  for (const n of names) for (const f of loaded[n].frames) if (f.true_t > xMax) xMax = f.true_t;
-  xMax = Math.ceil(xMax / 10) * 10;
+  // SAME left/right margins + xMax as the main plot, so panels line up.
+  const M = { l: 66, r: 14, t: 8, b: showXAxis ? 30 : 14 };
+  const X0 = M.l, X1 = w - M.r, Y0 = h - M.b, Y1 = M.t;
   const xPix = t => X0 + (t / xMax) * (X1 - X0);
   const yPix = v => Y0 - v * (Y0 - Y1);
 
-  // frame + 0/1 axis + threshold
+  // y gridlines 0 / 0.5 / 1
   ctx.strokeStyle = "#232b38"; ctx.lineWidth = 1; ctx.fillStyle = "#7b8798";
   ctx.font = "10px sans-serif"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
   for (const v of [0, 0.5, 1]) {
     ctx.beginPath(); ctx.moveTo(X0, yPix(v)); ctx.lineTo(X1, yPix(v)); ctx.stroke();
     ctx.fillText(v.toFixed(1), X0 - 6, yPix(v));
   }
+  // x gridlines aligned to the shared axis
+  const xs = niceStep(xMax, 10);
+  ctx.strokeStyle = "#1c2430";
+  for (let t = 0; t <= xMax; t += xs) {
+    ctx.beginPath(); ctx.moveTo(xPix(t), Y0); ctx.lineTo(xPix(t), Y1); ctx.stroke();
+  }
+  // ground-truth slide boundaries (solid white) — same set the main plot uses
+  drawBoundaries(ctx, loaded[names[0]].meta.ground_truth, xPix, Y1, Y0);
+  // gate line + label
   ctx.strokeStyle = "#4a3a1f"; ctx.setLineDash([4, 4]);
-  ctx.beginPath(); ctx.moveTo(X0, yPix(CONF_THRESHOLD)); ctx.lineTo(X1, yPix(CONF_THRESHOLD)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X0, yPix(threshold)); ctx.lineTo(X1, yPix(threshold)); ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = "#7b8798"; ctx.textAlign = "left";
-  ctx.fillText("conf threshold " + CONF_THRESHOLD, X0 + 4, yPix(CONF_THRESHOLD) - 7);
+  ctx.fillText(`gate ${threshold}`, X0 + 4, yPix(threshold) - 8);
 
-  // axis titles
+  // y-axis title
   ctx.fillStyle = "#9aa6b6"; ctx.font = "11px sans-serif";
-  ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-  ctx.fillText("true time — live audio (s)", (X0 + X1) / 2, h - 1);
-  ctx.save();
-  ctx.translate(15, (Y0 + Y1) / 2); ctx.rotate(-Math.PI / 2);
-  ctx.textBaseline = "middle";
-  ctx.fillText("confidence", 0, 0);
-  ctx.restore();
+  ctx.save(); ctx.translate(15, (Y0 + Y1) / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(ylabel, 0, 0); ctx.restore();
 
+  // x ticks + title (bottom panel only — the axis is shared with the others)
+  if (showXAxis) {
+    ctx.fillStyle = "#7b8798"; ctx.font = "10px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let t = 0; t <= xMax; t += xs) ctx.fillText(t + "s", xPix(t), Y0 + 4);
+    ctx.fillStyle = "#9aa6b6"; ctx.font = "11px sans-serif"; ctx.textBaseline = "bottom";
+    ctx.fillText("true time — live audio (s)", (X0 + X1) / 2, h - 1);
+  }
+
+  // one solid line per trace
   for (const n of names) {
-    ctx.strokeStyle = colorOf[n]; ctx.lineWidth = 1.4; ctx.beginPath();
+    ctx.strokeStyle = colorOf[n]; ctx.lineWidth = 1.4; ctx.setLineDash([]); ctx.beginPath();
     let started = false;
     for (const f of loaded[n].frames) {
-      const px = xPix(f.true_t), py = yPix(Math.max(0, Math.min(1, f.dtw_confidence ?? 0)));
+      const px = xPix(f.true_t), py = yPix(Math.max(0, Math.min(1, f[field] ?? 0)));
       if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
     }
     ctx.stroke();
   }
+  // hover cursor (hoverX is shared canvas-x across all panels)
   if (hoverX !== null && hoverX >= X0 && hoverX <= X1) {
-    ctx.strokeStyle = "#3a455a"; ctx.beginPath();
+    ctx.strokeStyle = "#3a455a"; ctx.lineWidth = 1; ctx.beginPath();
     ctx.moveTo(hoverX, Y1); ctx.lineTo(hoverX, Y0); ctx.stroke();
   }
 }
