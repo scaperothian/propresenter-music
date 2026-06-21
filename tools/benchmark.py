@@ -265,6 +265,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--device", default=None)
     p.add_argument("--matcher", default=None, choices=("dtw", "rigid"),
                    help="Sequence matcher (default: config.MATCHER).")
+    p.add_argument("--dtw-step-penalty", type=float, default=None,
+                   help="Per-non-diagonal-move penalty for the DTW matcher "
+                        "(0 = plain DTW; larger penalizes stalling/lag). "
+                        "Default: config.DTW_STEP_PENALTY.")
     p.add_argument("--json-out", default=None, help="Write raw per-offset results to JSON.")
     p.add_argument("--trace-out", default=None,
                    help="Write per-frame telemetry JSON (suffixed per offset).")
@@ -289,8 +293,9 @@ def main(argv: list[str] | None = None) -> None:
     device = _pick_device(args.device)
     print(f"Loading MERT on {device}…")
     processor, model = load_model(device)
-    from ppsync.config import MATCHER
+    from ppsync.config import DTW_STEP_PENALTY, MATCHER
 
+    step_penalty = args.dtw_step_penalty if args.dtw_step_penalty is not None else DTW_STEP_PENALTY
     aligner = SongAligner(
         cache_path=Path(args.cache),
         model=model, processor=processor, device=device, dry_run=True,
@@ -298,6 +303,7 @@ def main(argv: list[str] | None = None) -> None:
         # virtual (song) time rather than by wall-clock timers.
         wall_timers=False,
         matcher=args.matcher or MATCHER,
+        dtw_step_penalty=step_penalty,
     )
     print(f"matcher: {aligner.matcher}")
 

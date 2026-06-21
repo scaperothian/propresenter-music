@@ -40,6 +40,7 @@ def subsequence_dtw(
     query: np.ndarray,   # [M, D] live embeddings (L2-normalized)
     ref: np.ndarray,     # [N, D] reference window (L2-normalized, N > M)
     band_ratio: float = 0.1,
+    step_penalty: float = 0.0,
 ) -> tuple[int, float, float]:
     """
     Find the best-matching subsequence of *ref* for *query*.
@@ -54,10 +55,20 @@ def subsequence_dtw(
     already narrows the reference window around the coarse candidate, which
     provides equivalent computational savings.
 
+    *step_penalty* adds a fixed cost to every NON-diagonal move (vertical =
+    query advances while ref holds; horizontal = ref advances while query
+    holds).  The diagonal (1:1) move is free.  Plain DTW (penalty 0) absorbs
+    acoustic mismatch by stalling — repeating ref frames — which biases the
+    reported end index backward and lags the position estimate.  Penalizing
+    stalls pushes the path toward the diagonal, so the estimate tracks the
+    true position more tightly; in the limit the path is forced diagonal and
+    the result coincides with rigid 1:1 matching.
+
     Args:
-        query:      [M, D] live embedding buffer
-        ref:        [N, D] reference window (should be longer than query)
-        band_ratio: reserved for future use; currently ignored
+        query:        [M, D] live embedding buffer
+        ref:          [N, D] reference window (should be longer than query)
+        band_ratio:   reserved for future use; currently ignored
+        step_penalty: extra cost per non-diagonal move (0.0 = plain DTW)
 
     Returns:
         best_end_idx:  index in ref where the best subsequence ends
@@ -77,17 +88,17 @@ def subsequence_dtw(
     D[0, :] = C[0, :]
 
     for i in range(1, M):
-        # Standard three-predecessor DP over all ref positions
-        prev_row = D[i - 1, :]           # D[i-1, j]
-        prev_diag = np.roll(prev_row, 1)  # D[i-1, j-1]
+        # Three predecessors: diagonal (free), vertical (penalized), and
+        # horizontal (penalized, left-to-right dependency below).
+        prev_row = D[i - 1, :]           # D[i-1, j]   — vertical move
+        prev_diag = np.roll(prev_row, 1)  # D[i-1, j-1] — diagonal move
         prev_diag[0] = np.inf
 
-        # D[i, j] = C[i,j] + min(D[i-1,j], D[i-1,j-1], D[i,j-1])
-        # Compute row left-to-right to incorporate D[i, j-1] (horizontal move)
-        row = C[i, :] + np.minimum(prev_row, prev_diag)
+        row = C[i, :] + np.minimum(prev_diag, prev_row + step_penalty)
         for j in range(1, N):
-            if row[j - 1] + C[i, j] < row[j]:
-                row[j] = row[j - 1] + C[i, j]
+            horiz = row[j - 1] + step_penalty + C[i, j]
+            if horiz < row[j]:
+                row[j] = horiz
         D[i, :] = row
 
     # Best end: argmin of last query row
@@ -180,6 +191,7 @@ def align(
     band_ratio: float = 0.1,
     top_k: int = 1,
     cand_min_sep_sec: float = 8.0,
+    step_penalty: float = 0.0,
 ) -> dict:
     """
     Two-step alignment: cosine search → DTW refinement.
@@ -230,7 +242,8 @@ def align(
 
         if len(ref_window) >= len(live_buffer) and len(live_buffer) > 0:
             end_rel, path_cost, confidence = subsequence_dtw(
-                live_buffer, ref_window, band_ratio=band_ratio
+                live_buffer, ref_window, band_ratio=band_ratio,
+                step_penalty=step_penalty,
             )
             refined_idx = dtw_lo + end_rel
             refined_t = float(ref_timestamps[min(refined_idx, len(ref_timestamps) - 1)])

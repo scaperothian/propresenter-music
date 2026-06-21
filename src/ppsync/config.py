@@ -52,6 +52,12 @@ DTW_LIVE_SEC = 6.0          # live buffer capacity fed to DTW comparison
 DTW_MIN_LIVE_SEC = 4.0      # minimum buffer fill before DTW runs (warm-up gate)
 DTW_SEARCH_SEC = 45.0       # forward search window in reference audio
 DTW_BAND_RATIO = 0.1        # Sakoe-Chiba band as fraction of query length
+DTW_STEP_PENALTY = 0.0      # extra cost added to each non-diagonal DP move
+                            # (horizontal/vertical = stalling).  0.0 = plain
+                            # DTW; larger penalizes warping and pushes the path
+                            # toward the diagonal (-> rigid as it grows), which
+                            # cuts the position lag from path-stalling on
+                            # acoustically-mismatched live audio.
 
 # ---------------------------------------------------------------------------
 # Live-mean adaptation (cross-acoustic robustness)

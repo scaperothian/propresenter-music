@@ -207,6 +207,22 @@ tempo-variable sources (live band).
 
 **No Sakoe-Chiba band in `subsequence_dtw`.**  A band of `|i - j| <= k` is wrong for subsequence DTW because the optimal path is offset by the match position, not near (0,0).  The reference window passed by `align()` is already narrow (±`dtw_context_sec` around the candidate), which limits the search space without breaking correctness.
 
+**DTW step penalty (`DTW_STEP_PENALTY`, default 0.0 = off).**  Plain DTW
+absorbs acoustic mismatch by *stalling* — repeating a reference frame
+(horizontal/vertical DP moves) — which biases the reported end index backward
+and lags the position estimate (the documented 0.5–1s DTW lag).  Adding a
+fixed cost to every non-diagonal move penalizes stalls and pushes the path
+toward the diagonal; in the limit it forces a 1:1 path and coincides with the
+rigid matcher (so the penalty is a continuous dial between DTW and rigid).
+penalty 0.0 is byte-identical to plain DTW; a clean diagonal match (studio
+playback) is invariant because the diagonal is free.  Measured (matched-
+recording DTW): it cut studio-Drive fire MAE 272 → 109ms at penalty 0.1 — but
+it is **song-dependent, not a free win**: the same 0.1 made studio-Forrest
+Frank DTW *worse* (216 → 289ms, 22/22 → 21/22), so there is no universal
+value.  Kept off by default; tune per-song via `--dtw-step-penalty` for the
+live-band (DTW) mode.  Rigid never calls `subsequence_dtw`, so it is
+unaffected.
+
 **Contrastive normalization, not ZCA.**  `apply_contrastive` subtracts the song-level mean then L2-normalizes.  This removes the dominant "sounds like music" direction that makes all sections score ~0.9 cosine similarity.  ZCA from `mert-experiment` is more powerful but expensive; add it if per-slide similarity remains too high.
 
 **HMM transition step mismatch (known, tolerated).**  The transition matrix is built for `stride_sec` steps but `hmm.update()` runs once per 200ms chunk, so the transition prior advances slower than real time.  With confident DTW observations the emission dominates and this barely matters; it is why the HMM alone cannot drive timely triggers (see trigger note above).  Fix by rebuilding A for the chunk interval if the HMM ever needs to free-run through long low-confidence gaps.

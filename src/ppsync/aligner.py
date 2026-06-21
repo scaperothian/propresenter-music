@@ -39,6 +39,7 @@ from .config import (
     DTW_LIVE_SEC,
     DTW_MIN_LIVE_SEC,
     DTW_SEARCH_SEC,
+    DTW_STEP_PENALTY,
     INIT_AGREE_SEC,
     INIT_BUFFER_SEC,
     INIT_CAND_SEP_SEC,
@@ -143,6 +144,7 @@ class SongAligner:
         chunk_sec: float = CHUNK_SEC,
         wall_timers: bool = True,
         matcher: str = MATCHER,
+        dtw_step_penalty: float = DTW_STEP_PENALTY,
     ) -> None:
         self.device = device
         self.model = model
@@ -151,6 +153,7 @@ class SongAligner:
         self.dtw_live_sec = dtw_live_sec
         self.dtw_search_sec = dtw_search_sec
         self.matcher = matcher
+        self.dtw_step_penalty = dtw_step_penalty
 
         # Load cache
         cache = load_cache(cache_path)
@@ -305,6 +308,7 @@ class SongAligner:
             band_ratio=0.1,
             top_k=top_k,
             cand_min_sep_sec=INIT_CAND_SEP_SEC,
+            step_penalty=self.dtw_step_penalty,
         )
 
     def _jump_beats_local(self, live_buffer: np.ndarray, jump_result: dict) -> bool:
