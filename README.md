@@ -96,10 +96,11 @@ embeddings for coarse matching, and the HMM transition matrix derived from slide
 .venv/bin/python tools/benchmark.py data/incubus/drive/incubus_drive_cache.npz \
     --file studio_drive.wav --manifest data/incubus/drive/incubus_drive_manifest.json \
     --offsets 0,30,62,90 [--duration 30] [--matcher dtw|rigid] \
+    [--dtw-step-penalty 0.1] \
     [--json-out data/incubus/drive/bench_incubus_drive_<experiment>.json]
 ```
 
-Replays the file from each start offset and prints a per-slide report (target time, fired time, verdict) plus tracking error and per-chunk latency against the real-time budget. `--duration` tests partial-song slices; `--trace-out` writes a self-describing per-frame trace (`{meta, frames}`) for the offline analysis view (`webapp/server.py --trace-dir … → /analysis`), which plots position-vs-time so the DTW stalling effect is visible and rigid/DTW runs overlay.
+Replays the file from each start offset and prints a per-slide report (target time, fired time, verdict) plus tracking error and per-chunk latency against the real-time budget. `--duration` tests partial-song slices; `--dtw-step-penalty` penalizes DTW path-stalling to cut its position lag (off by default — see [CLAUDE.md](CLAUDE.md); helps some songs, not all). `--trace-out` writes a self-describing per-frame trace (`{meta, frames}`) for the offline analysis view (`webapp/server.py --trace-dir … → /analysis`): three stacked panels on a shared time axis — position trajectory (DTW stalling shows as flat segments against the dashed ideal), matcher confidence, and HMM trigger confidence, with ground-truth boundaries marked and any number of rigid/DTW runs overlaid.
 
 ### 5. Verify ProPresenter triggering end to end
 
@@ -173,7 +174,7 @@ Every chunk logs one JSON line (`--log`): matcher position/confidence/margin, an
 ## Running tests
 
 ```bash
-.venv/bin/pytest      # 55 tests, ~5s, no model download
+.venv/bin/pytest      # 65 tests, ~2s, no model download
                       # tests/test_pp_live.py runs only when ProPresenter
                       # is reachable on localhost:1025 (else auto-skips)
 ```
@@ -206,8 +207,9 @@ tools/
   diag_phase.py            chunk-phase sensitivity diagnostics
 
 webapp/
-  server.py          SSE server tailing the telemetry log
+  server.py          live-monitor SSE + offline-analysis trace API
   index.html         live dashboard (slide box + sparklines)
+  analysis.html      offline analysis (trajectory + confidence panels)
 
 data/                       (gitignored — local song artifacts)
   <artist>/<song>/          one directory per song, e.g. data/incubus/drive/

@@ -52,14 +52,16 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
     --log /tmp/ppsync_incubus_drive.jsonl   # localhost:8765
 
 # Offline analysis web UI (plots benchmark --trace-out files; localhost:8765/analysis)
-# overlays rigid vs DTW position-vs-time so the stalling effect is visible
+# three stacked panels on a shared true-time axis: position trajectory (stalling
+# = flat vs the dashed ideal), matcher confidence, HMM trigger confidence;
+# solid white verticals mark ground-truth boundaries; overlays any # of traces
 .venv/bin/python webapp/server.py --trace-dir /tmp/ppsync_traces
 
 # Start-offset re-sync benchmark (file-based, no mic; see tools/benchmark.py)
 .venv/bin/python tools/benchmark.py data/incubus/drive/incubus_drive_cache.npz \
     --file <song>.wav --manifest <song>_manifest.json \
     --offsets 0,30,64.1,95 [--duration 30] [--matcher dtw|rigid] \
-    [--trace-out /tmp/ppsync_traces/run.json]   # self-describing {meta,frames}
+    [--dtw-step-penalty 0.1] [--trace-out /tmp/ppsync_traces/run.json]
 
 # Closed-loop ProPresenter trigger test (changes slides, restores after)
 .venv/bin/python tools/pp_trigger_test.py data/incubus/drive/incubus_drive_manifest.json
@@ -288,7 +290,7 @@ trigger shows the current slide immediately.
 
 | File | What it covers |
 |---|---|
-| `test_dtw.py` | cosine distance, subsequence DTW, similarity search bounds, `align()` keys |
+| `test_dtw.py` | cosine distance, subsequence DTW, similarity search bounds, `align()` keys, step penalty (zero=plain, diagonal invariant, raises warped cost) |
 | `test_rigid.py` | `rigid_align` (exact subsequence, empty window) |
 | `test_hmm.py` | transition matrix (row sums, left-to-right, absorbing last state), `update()` keys, state probs sum to 1, convergence, drift, reset, trigger confidence near boundary |
 | `test_io.py` | manifest parsing (stops inferred, finalize, empty raises), audio resampling and stereo→mono |
