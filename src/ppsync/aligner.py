@@ -586,5 +586,6 @@ class SongAligner:
         """Run MERT on one audio chunk, return [T_chunk, D] for self.mert_layer."""
         if self.model is None or self.processor is None:
             raise RuntimeError("MERT model not loaded — pass model/processor to SongAligner.")
-        hidden = embed_chunk_live(chunk, self.model, self.processor, self.device)
-        return hidden[self.mert_layer]  # [T_chunk, D]
+        return embed_chunk_live(
+            chunk, self.model, self.processor, self.device, mert_layer=self.mert_layer
+        )  # [T_chunk, D]
