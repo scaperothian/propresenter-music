@@ -21,6 +21,15 @@ requests = ">=2.28"
 pytest = ">=7.0"
 pytest-cov = ">=4.0"
 
+# Exploration notebooks (notebooks/).  Optional: install with
+# `poetry install --with notebooks`.
+[tool.poetry.group.notebooks]
+optional = true
+
+[tool.poetry.group.notebooks.dependencies]
+jupyterlab = ">=4.0"
+matplotlib = ">=3.7"
+
 [tool.poetry.scripts]
 ppsync-preprocess = "ppsync.cli:preprocess_main"
 ppsync-align = "ppsync.cli:align_main"

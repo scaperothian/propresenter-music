@@ -12,3 +12,6 @@ dist/
 
 # Song data artifacts (manifests, caches, benchmark history) — local only for now
 data/
+
+# Jupyter
+.ipynb_checkpoints/
