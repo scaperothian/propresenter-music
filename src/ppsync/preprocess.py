@@ -22,6 +22,7 @@ song_slug         str scalar   artist_title filename slug (e.g. "incubus_drive")
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -40,6 +41,8 @@ from .embed import embed_audio, load_model, prep_inputs
 from .io import finalize_slide_stops, load_audio, load_manifest, load_song_meta
 from .transform import apply_contrastive, fit_global
 from .windows import pool_slide_embeddings, strided_window_embeddings
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -184,24 +187,24 @@ def preprocess_song(
         else:
             device = "cpu"
 
-    print(f"Loading manifest: {manifest_path}")
+    logger.info(f"Loading manifest: {manifest_path}")
     meta = load_song_meta(manifest_path)
     audio_path, slides = load_manifest(manifest_path)
     artist_str = meta["artist"] or "(unknown artist)"
-    print(f"  Song: {artist_str} — {meta['song_id']}  [slug: {meta['slug']}]")
+    logger.info(f"  Song: {artist_str} — {meta['song_id']}  [slug: {meta['slug']}]")
     if not meta["artist"]:
-        print("  WARNING: manifest has no 'artist' field — add one so cache/log "
-              "filenames identify the song unambiguously.")
-    print(f"  {len(slides)} slides, audio: {audio_path}")
+        logger.warning("manifest has no 'artist' field — add one so cache/log "
+                       "filenames identify the song unambiguously.")
+    logger.info(f"  {len(slides)} slides, audio: {audio_path}")
 
-    print(f"Loading audio…")
+    logger.info("Loading audio…")
     wav = load_audio(audio_path)
     song_duration = float(wav.shape[0]) / TARGET_SR
     finalize_slide_stops(slides, song_duration)
-    print(f"  Duration: {song_duration:.2f}s  ({wav.shape[0]:,} samples @ {TARGET_SR} Hz)")
+    logger.info(f"  Duration: {song_duration:.2f}s  ({wav.shape[0]:,} samples @ {TARGET_SR} Hz)")
 
     for s in slides:
-        print(
+        logger.info(
             f"    [{s['slide_id']:20s}]  "
             f"{s['t_ref']:6.2f}s – {s['t_stop']:6.2f}s  "
             f"({s['t_stop'] - s['t_ref']:.2f}s)"
@@ -216,17 +219,17 @@ def preprocess_song(
     if embed_mode == "sliding":
         # One forward pass per [t - lookback, t] window — phase-independent,
         # matching the live path which re-embeds its full lookback each chunk.
-        print(f"\nRunning MERT on {device}  (layer {mert_layer}, sliding "
-              f"{lookback_sec}s windows, stride {stride_sec}s)…")
+        logger.info(f"Running MERT on {device}  (layer {mert_layer}, sliding "
+                    f"{lookback_sec}s windows, stride {stride_sec}s)…")
         raw_win_embs, ref_timestamps = sliding_window_embeddings(
             wav, model, processor, device,
             lookback_sec=lookback_sec, stride_sec=stride_sec,
             mert_layer=mert_layer, batch_size=batch_size,
             show_progress=show_progress,
         )
-        print(f"  Reference windows: {raw_win_embs.shape[0]:,}")
+        logger.info(f"  Reference windows: {raw_win_embs.shape[0]:,}")
     else:
-        print(f"\nRunning MERT on {device}  (layer {mert_layer}, chunk={embed_chunk_sec}s)…")
+        logger.info(f"Running MERT on {device}  (layer {mert_layer}, chunk={embed_chunk_sec}s)…")
         hidden = embed_audio(
             wav, model, processor, device,
             chunk_sec=embed_chunk_sec, show_progress=show_progress,
@@ -236,21 +239,21 @@ def preprocess_song(
         # Short chunks lose conv edge frames (0.2s -> 14 frames = 70fps, not
         # 75); derive the effective rate so timestamps stay true to song time.
         frame_rate = frames.shape[0] / song_duration
-        print(f"  Frames: {frames.shape[0]:,}  Dim: {frames.shape[1]}  "
-              f"({frame_rate:.2f} fps effective)")
+        logger.info(f"  Frames: {frames.shape[0]:,}  Dim: {frames.shape[1]}  "
+                    f"({frame_rate:.2f} fps effective)")
 
-        print(f"\nBuilding dense reference embeddings "
-              f"(lookback={lookback_sec}s, stride={stride_sec}s)…")
+        logger.info(f"Building dense reference embeddings "
+                    f"(lookback={lookback_sec}s, stride={stride_sec}s)…")
         raw_win_embs, ref_timestamps = strided_window_embeddings(
             frames, lookback_sec=lookback_sec, stride_sec=stride_sec, fps=frame_rate
         )
-    print(f"  Reference windows: {raw_win_embs.shape[0]:,}")
+    logger.info(f"  Reference windows: {raw_win_embs.shape[0]:,}")
 
     global_emb = fit_global(raw_win_embs)  # [D]
 
     ref_embs = apply_contrastive(raw_win_embs, global_emb)  # [N_ref, D]
 
-    print("Building slide prototypes…")
+    logger.info("Building slide prototypes…")
     slide_protos_list: list[torch.Tensor] = []
     slide_t_refs = np.array([s["t_ref"] for s in slides], dtype=np.float64)
     slide_t_stops = np.array([s["t_stop"] for s in slides], dtype=np.float64)
@@ -268,7 +271,7 @@ def preprocess_song(
         slide_protos_list.append(proto)
     slide_protos = torch.stack(slide_protos_list)  # [N_slides, D]
 
-    print("Building HMM transition matrix…")
+    logger.info("Building HMM transition matrix…")
     hmm_A, hmm_pi = build_hmm_transition(slide_t_refs, slide_t_stops, stride_sec)
 
     payload = {
@@ -296,7 +299,7 @@ def preprocess_song(
         "song_slug": np.array(meta["slug"]),
     }
     np.savez(str(output_path), **payload)
-    print(f"\nCache saved to: {output_path}")
+    logger.info(f"Cache saved to: {output_path}")
     return payload
 
 

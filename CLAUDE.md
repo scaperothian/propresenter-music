@@ -83,7 +83,8 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
 | `audio_capture.py` | `MicCapture` (native rate, drain), `FileCapture` |
 | `aligner.py` | `SongAligner`, `select_trigger_boundary`, `same_onscreen_slide` |
 | `trigger.py` | `TriggerScheduler` — scheduled (timer-based) fires, ProPresenter mode |
-| `telemetry.py` | `TelemetryLogger` |
+| `telemetry.py` | `TelemetryLogger` (JSON-lines run trace) |
+| `logconf.py` | `configure_logging` — non-blocking (`QueueHandler`) stdout logging |
 | `cli.py` | `preprocess_main`, `align_main`, `eval_main` |
 
 ## Data flow
@@ -285,6 +286,20 @@ itself (regression-tested).
 initial lock (consistency + cost margin) succeeds, at which point
 `set_prior_from_coarse()` seeds the HMM at the locked slide and the catch-up
 trigger shows the current slide immediately.
+
+**Logging vs the real-time loop.**  Processing/library code (`aligner`,
+`trigger`, `audio_capture`, `preprocess`) emits via `logging.getLogger(__name__)`
+— never `print` — so output is routable and silenceable.  `logconf.configure_logging`
+(called once per CLI command) wires the `ppsync` logger to stdout through a
+`QueueHandler` → background `QueueListener`, so formatting/I/O happen off the
+audio thread (matters in the sounddevice callback and the 200ms loop).  The
+per-chunk status line in `align_main` logs at **DEBUG** and is guarded by
+`log.isEnabledFor(DEBUG)` so its f-string is not even built unless `-v`/`--log-level
+debug` is set — that, not the print→logging swap itself, is the latency win.
+Genuine CLI *output* in `cli.py` (device list, eval results table, startup
+banner) stays `print`; only diagnostics became logs.  `TelemetryLogger`
+(`--log` JSON-lines) is unrelated — it records the run trace for the webapp,
+not human-readable logging.
 
 ## Test coverage
 

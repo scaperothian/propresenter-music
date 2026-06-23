@@ -10,6 +10,7 @@ ppsync-eval         Offline evaluation against ground-truth annotations.
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
@@ -26,6 +27,27 @@ from .config import (
     TRIGGER_BUFFER_MS,
     TRIGGER_CONFIDENCE_MIN,
 )
+from .logconf import configure_logging
+
+log = logging.getLogger(__name__)
+
+
+def _add_logging_args(p: argparse.ArgumentParser) -> None:
+    """Add the shared --log-level / -v verbosity flags to a parser."""
+    p.add_argument(
+        "--log-level", default="info", metavar="LEVEL",
+        help="Logging verbosity: debug | info | warning | error (default: info). "
+             "Logs are written to stdout.",
+    )
+    p.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="Shortcut for --log-level debug (shows the per-chunk status line).",
+    )
+
+
+def _resolve_level(args: argparse.Namespace) -> str:
+    """Verbose flag wins; otherwise the explicit --log-level."""
+    return "debug" if getattr(args, "verbose", False) else args.log_level
 
 
 # ===========================================================================
@@ -69,6 +91,7 @@ def _preprocess_parser() -> argparse.ArgumentParser:
              "Larger = faster preprocessing while GPU memory allows.",
     )
     p.add_argument("--quiet", action="store_true", help="Suppress progress output.")
+    _add_logging_args(p)
     return p
 
 
@@ -77,6 +100,10 @@ def preprocess_main(argv: list[str] | None = None) -> None:
     from .preprocess import preprocess_song
 
     args = _preprocess_parser().parse_args(argv)
+    level = _resolve_level(args)
+    if args.quiet and level == "info":
+        level = "warning"  # --quiet drops progress unless level set explicitly
+    configure_logging(level)
     manifest_path = Path(args.manifest)
     if args.output:
         output_path = Path(args.output)
@@ -185,6 +212,7 @@ def _align_parser() -> argparse.ArgumentParser:
         "--device", default=None,
         help="Compute device: cpu | cuda | mps.",
     )
+    _add_logging_args(p)
     return p
 
 
@@ -197,6 +225,7 @@ def align_main(argv: list[str] | None = None) -> None:
     from .telemetry import TelemetryLogger
 
     args = _align_parser().parse_args(argv)
+    configure_logging(_resolve_level(args))
 
     if args.list_devices:
         import sounddevice as sd
@@ -287,10 +316,10 @@ def align_main(argv: list[str] | None = None) -> None:
 
     log_path = Path(args.log) if args.log else None
 
-    with TelemetryLogger(log_path) as logger:
+    with TelemetryLogger(log_path) as telemetry:
         # First log line identifies the session's song so a telemetry file is
         # self-describing (the webapp shows it; offline tooling can filter).
-        logger.log({
+        telemetry.log({
             "event": "meta",
             "song_id": aligner.song_id,
             "artist": aligner.artist,
@@ -300,21 +329,24 @@ def align_main(argv: list[str] | None = None) -> None:
         try:
             for chunk, wall_t in source:
                 frame = aligner.process_chunk(chunk, chunk_wall_t=wall_t)
-                logger.log(frame)
+                telemetry.log(frame)
                 if frame.get("status"):  # buffering / silence — no telemetry row
                     continue
-                status = (
-                    f"  chunk={frame['chunk']:4d}"
-                    f"  dtw_t={frame['dtw_refined_t']:6.2f}s"
-                    f"  dtw_conf={frame['dtw_confidence']:.2f}"
-                    f"  slide=[{frame['hmm_current_slide_id']}]"
-                    f"  trigger_conf={frame['hmm_trigger_confidence']:.2f}"
-                )
-                if frame["triggered"]:
-                    status += f"  *** TRIGGER → {frame['triggered_slide_id']} ***"
-                print(status)
+                # Per-chunk status is the hot-path line; gate it so the f-string
+                # is not even built (let alone written) unless DEBUG is on.
+                if log.isEnabledFor(logging.DEBUG):
+                    status = (
+                        f"  chunk={frame['chunk']:4d}"
+                        f"  dtw_t={frame['dtw_refined_t']:6.2f}s"
+                        f"  dtw_conf={frame['dtw_confidence']:.2f}"
+                        f"  slide=[{frame['hmm_current_slide_id']}]"
+                        f"  trigger_conf={frame['hmm_trigger_confidence']:.2f}"
+                    )
+                    if frame["triggered"]:
+                        status += f"  *** TRIGGER → {frame['triggered_slide_id']} ***"
+                    log.debug(status)
         except KeyboardInterrupt:
-            print("\nStopped.")
+            log.info("Stopped.")
 
 
 # ===========================================================================
@@ -350,6 +382,7 @@ def _eval_parser() -> argparse.ArgumentParser:
         help="Tolerance window for counting triggers as correct (default: 500ms).",
     )
     p.add_argument("--device", default=None)
+    _add_logging_args(p)
     return p
 
 
@@ -363,6 +396,7 @@ def eval_main(argv: list[str] | None = None) -> None:
     from .telemetry import TelemetryLogger
 
     args = _eval_parser().parse_args(argv)
+    configure_logging(_resolve_level(args))
 
     if args.device:
         device = args.device
@@ -401,10 +435,10 @@ def eval_main(argv: list[str] | None = None) -> None:
     log_path = Path(args.log) if args.log else None
     trigger_log: list[dict] = []
 
-    with TelemetryLogger(log_path) as logger:
+    with TelemetryLogger(log_path) as telemetry:
         for chunk, wall_t in source:
             frame = aligner.process_chunk(chunk, chunk_wall_t=wall_t)
-            logger.log(frame)
+            telemetry.log(frame)
             if frame.get("triggered"):
                 trigger_log.append(
                     {
