@@ -26,6 +26,7 @@ entire reference sequence is eligible.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import deque
 from pathlib import Path
@@ -67,6 +68,8 @@ from .hmm import HMMPredictor
 from .preprocess import load_cache
 from .rigid import rigid_align
 from .trigger import TriggerScheduler
+
+logger = logging.getLogger(__name__)
 
 
 def select_trigger_boundary(
@@ -188,9 +191,9 @@ class SongAligner:
         cache_fp16 = bool(cache.get("mert_fp16", False))
         live_fp16 = MERT_FP16 and device != "cpu"
         if cache_fp16 != live_fp16:
-            print(f"WARNING: cache built with fp16={cache_fp16} but live MERT runs "
-                  f"fp16={live_fp16} — embeddings will not match well; "
-                  f"re-run ppsync-preprocess.")
+            logger.warning(f"cache built with fp16={cache_fp16} but live MERT runs "
+                           f"fp16={live_fp16} — embeddings will not match well; "
+                           f"re-run ppsync-preprocess.")
 
         # HMM
         self.hmm = HMMPredictor(
@@ -586,5 +589,6 @@ class SongAligner:
         """Run MERT on one audio chunk, return [T_chunk, D] for self.mert_layer."""
         if self.model is None or self.processor is None:
             raise RuntimeError("MERT model not loaded — pass model/processor to SongAligner.")
-        hidden = embed_chunk_live(chunk, self.model, self.processor, self.device)
-        return hidden[self.mert_layer]  # [T_chunk, D]
+        return embed_chunk_live(
+            chunk, self.model, self.processor, self.device, mert_layer=self.mert_layer
+        )  # [T_chunk, D]

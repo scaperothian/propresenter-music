@@ -129,15 +129,22 @@ def embed_chunk_live(
     model,
     processor,
     device: str,
+    mert_layer: int | None = None,
 ) -> torch.Tensor:
     """
     Run MERT on a single short chunk for live inference.
 
     Args:
         waveform_chunk: 1-D float tensor at TARGET_SR (e.g. 200ms = 4800 samples)
+        mert_layer:     if given, return only this layer's frames — the other
+                        hidden states are dropped on-device before the fp32 cast
+                        and device->CPU copy, so only one tensor is moved
+                        (the live loop only ever uses a single layer).  None
+                        returns the full stack (diagnostics).
 
     Returns:
-        [num_layers + 1, T_chunk, hidden_dim]
+        [num_layers + 1, T_chunk, hidden_dim]  when mert_layer is None
+        [T_chunk, hidden_dim]                  when mert_layer is given
     """
     inputs = prep_inputs(
         processor(waveform_chunk.numpy(), sampling_rate=TARGET_SR, return_tensors="pt"),
@@ -147,4 +154,6 @@ def embed_chunk_live(
     with torch.no_grad():
         out = model(**inputs, output_hidden_states=True)
 
+    if mert_layer is not None:
+        return out.hidden_states[mert_layer].squeeze(0).float().cpu()
     return torch.stack(out.hidden_states, dim=0).squeeze(1).float().cpu()

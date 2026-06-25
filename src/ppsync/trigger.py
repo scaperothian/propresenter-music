@@ -31,12 +31,15 @@ moment (playback advances at 1.0 song-sec per wall-sec):
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 
 import requests
 
 from .config import REST_TIMEOUT_SEC, REST_URL, TRIGGER_BUFFER_MS, TRIGGER_CONFIDENCE_MIN
+
+logger = logging.getLogger(__name__)
 
 
 class TriggerScheduler:
@@ -256,8 +259,8 @@ class TriggerScheduler:
     ) -> None:
         if self.pp_controller is not None and pp_slide_index is not None:
             if self.dry_run:
-                print(f"[TRIGGER dry-run] {slide_id}  →  "
-                      f"go_to_slide({pp_slide_index + 1})")
+                logger.info(f"[TRIGGER dry-run] {slide_id}  →  "
+                            f"go_to_slide({pp_slide_index + 1})")
                 self.last_fire_result = {"slide_id": slide_id, "mode": "dry-run",
                                          "ok": True}
                 return
@@ -276,7 +279,7 @@ class TriggerScheduler:
             "current_t": round(current_t, 4),
         }
         if self.dry_run:
-            print(f"[TRIGGER dry-run] {payload}")
+            logger.info(f"[TRIGGER dry-run] {payload}")
             return
         threading.Thread(
             target=self._send_legacy, args=(payload, slide_id, boundary_t, confidence),
@@ -288,13 +291,13 @@ class TriggerScheduler:
         try:
             # go_to_slide is 1-indexed (propresenter-client convention).
             ok = self.pp_controller.go_to_slide(pp_slide_index + 1)
-            print(f"[TRIGGER] slide={slide_id!r}  t={boundary_t:.2f}s  "
-                  f"conf={confidence:.2f}  → go_to_slide({pp_slide_index + 1}) "
-                  f"{'ok' if ok else 'FAILED'}")
+            logger.info(f"[TRIGGER] slide={slide_id!r}  t={boundary_t:.2f}s  "
+                        f"conf={confidence:.2f}  → go_to_slide({pp_slide_index + 1}) "
+                        f"{'ok' if ok else 'FAILED'}")
             self.last_fire_result = {"slide_id": slide_id, "mode": "propresenter",
                                      "ok": bool(ok)}
         except Exception as exc:  # client raises requests exceptions internally
-            print(f"[TRIGGER error] go_to_slide({pp_slide_index + 1}): {exc}")
+            logger.error(f"[TRIGGER error] go_to_slide({pp_slide_index + 1}): {exc}")
             self.last_fire_result = {"slide_id": slide_id, "mode": "propresenter",
                                      "ok": False, "error": str(exc)}
 
@@ -302,11 +305,11 @@ class TriggerScheduler:
                      confidence: float) -> None:
         try:
             resp = requests.post(self.rest_url, json=payload, timeout=self.rest_timeout_sec)
-            print(f"[TRIGGER] slide={slide_id!r}  t={boundary_t:.2f}s  "
-                  f"conf={confidence:.2f}  → HTTP {resp.status_code}")
+            logger.info(f"[TRIGGER] slide={slide_id!r}  t={boundary_t:.2f}s  "
+                        f"conf={confidence:.2f}  → HTTP {resp.status_code}")
             self.last_fire_result = {"slide_id": slide_id, "mode": "legacy-post",
                                      "ok": resp.status_code < 400}
         except requests.RequestException as exc:
-            print(f"[TRIGGER error] {exc}")
+            logger.error(f"[TRIGGER error] {exc}")
             self.last_fire_result = {"slide_id": slide_id, "mode": "legacy-post",
                                      "ok": False, "error": str(exc)}

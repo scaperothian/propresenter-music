@@ -5,6 +5,7 @@ Both sources produce fixed-size chunks of float32 mono audio at TARGET_SR.
 
 from __future__ import annotations
 
+import logging
 import queue
 import threading
 import time
@@ -16,6 +17,8 @@ import torch
 import torchaudio
 
 from .config import CHUNK_SEC, TARGET_SR
+
+logger = logging.getLogger(__name__)
 
 
 class AudioCapture:
@@ -54,7 +57,7 @@ class MicCapture(AudioCapture):
 
     def _callback(self, indata, frames, time_info, status):
         if status and not self._status_warned:
-            print(f"[mic] stream status: {status}", flush=True)
+            logger.warning(f"[mic] stream status: {status}")
             self._status_warned = True
         self._q.put(indata[:, 0].copy())  # take first channel (mono)
 
@@ -64,8 +67,8 @@ class MicCapture(AudioCapture):
         dev_info = sd.query_devices(self.device, kind="input")
         native_sr = int(dev_info["default_samplerate"])
         blocksize = int(self.chunk_sec * native_sr)
-        print(f"[mic] {dev_info['name']}  {native_sr} Hz → {TARGET_SR} Hz, "
-              f"{self.chunk_sec * 1000:.0f}ms blocks")
+        logger.info(f"[mic] {dev_info['name']}  {native_sr} Hz → {TARGET_SR} Hz, "
+                    f"{self.chunk_sec * 1000:.0f}ms blocks")
 
         t_start = time.monotonic()
         samples_out = 0
