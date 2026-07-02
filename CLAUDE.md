@@ -63,9 +63,20 @@ python3.11 -m venv .venv && .venv/bin/pip install -e .
     --offsets 0,30,64.1,95 [--duration 30] [--matcher dtw|rigid] \
     [--dtw-step-penalty 0.1] [--trace-out /tmp/ppsync_traces/run.json]
 
+# Per-chunk latency benchmark (real-time budget; embed-vs-rest breakdown)
+.venv/bin/python tools/latency_benchmark.py \
+    data/incubus/drive/incubus_drive_cache.npz --file <song>.wav
+
+# Dataset-wide accuracy + latency report -> benchmarks/REPORT.md + results.json
+# (builds manifests + caches for every <artist>/<song>/ with audio + annotation)
+.venv/bin/python tools/benchmark_report.py --dataset ../slide-agent/dataset \
+    [--offsets 0,30] [--matcher dtw|rigid] [--only cocaine,layla] [--rebuild]
+
 # Closed-loop ProPresenter trigger test (changes slides, restores after)
 .venv/bin/python tools/pp_trigger_test.py data/incubus/drive/incubus_drive_manifest.json
 ```
+
+See `benchmarks/README.md` for the metric definitions and CI notes.
 
 ## Package layout
 
