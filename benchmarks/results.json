@@ -1,0 +1,1626 @@
+{
+  "meta": {
+    "date": "2026-06-26T07:41:11",
+    "device": "mps",
+    "matcher": "rigid",
+    "step_penalty": 0.0,
+    "offsets": [
+      0.0
+    ],
+    "window_ms": 750.0,
+    "warmup_sec": 8.0,
+    "chunk_budget_ms": 200.0
+  },
+  "songs": [
+    {
+      "artist": "Dave Matthews Band",
+      "song_id": "The Space Between",
+      "slug": "dave_matthews_band_the_space_between",
+      "n_boundaries": 28,
+      "song_duration": 242.0,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 27,
+      "reachable": 27,
+      "spurious": 0,
+      "fire_mae_ms": 399.99999999999784,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.20000000000000284,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 46.26600001938641,
+      "lat_e2e_p50_ms": 47.0,
+      "lat_e2e_p95_ms": 53.0,
+      "lat_e2e_max_ms": 71.2,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000284,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 2.0079999999999907,
+          "hmm_p90_s": 4.439999999999998,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 27,
+          "hits": 27,
+          "recall": 1.0,
+          "fire_mae_ms": 399.99999999999784,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 28,
+          "proc_mean_ms": 47.32685664939551,
+          "proc_p50_ms": 46.7,
+          "proc_p95_ms": 51.914999999999985,
+          "max_proc_ms": 77.5,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_verse1",
+              6.0
+            ],
+            [
+              "01_verse1",
+              12.76
+            ],
+            [
+              "02_hook",
+              24.39
+            ],
+            [
+              "03_hook",
+              30.86
+            ],
+            [
+              "04_hook",
+              38.53
+            ],
+            [
+              "05_verse2",
+              49.16
+            ],
+            [
+              "06_verse2",
+              57.41
+            ],
+            [
+              "07_hook2",
+              75.09
+            ],
+            [
+              "08_hook2",
+              81.62
+            ],
+            [
+              "09_hook2",
+              89.32
+            ],
+            [
+              "10_breakdown",
+              100.3
+            ],
+            [
+              "11_breakdown",
+              109.18
+            ],
+            [
+              "12_breakdown",
+              114.21
+            ],
+            [
+              "13_breakdown",
+              117.28
+            ],
+            [
+              "14_hook3",
+              128.85
+            ],
+            [
+              "15_hook3",
+              135.19
+            ],
+            [
+              "16_hook3",
+              142.59
+            ],
+            [
+              "17_hook3",
+              151.44
+            ],
+            [
+              "18_hook3",
+              157.31
+            ],
+            [
+              "19_hook3",
+              165.59
+            ],
+            [
+              "20_hook3",
+              174.36
+            ],
+            [
+              "21_hook3",
+              186.97
+            ],
+            [
+              "22_hook3",
+              196.57
+            ],
+            [
+              "23_hook3",
+              202.92
+            ],
+            [
+              "24_hook3",
+              210.65
+            ],
+            [
+              "25_hook3",
+              219.13
+            ],
+            [
+              "26_hook3",
+              230.92
+            ],
+            [
+              "27_hook3",
+              235.6
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Eric Clapton",
+      "song_id": "Cocaine",
+      "slug": "eric_clapton_cocaine",
+      "n_boundaries": 17,
+      "song_duration": 218.74667358398438,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 17,
+      "reachable": 17,
+      "spurious": 0,
+      "fire_mae_ms": 399.99999999999625,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.20000000000000284,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 45.7619585795328,
+      "lat_e2e_p50_ms": 46.8,
+      "lat_e2e_p95_ms": 51.7,
+      "lat_e2e_max_ms": 58.5,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000284,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 6.999000000000009,
+          "hmm_p90_s": 74.88099999999999,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 17,
+          "hits": 17,
+          "recall": 1.0,
+          "fire_mae_ms": 399.99999999999625,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 17,
+          "proc_mean_ms": 47.957920310981535,
+          "proc_p50_ms": 47.2,
+          "proc_p95_ms": 53.3,
+          "max_proc_ms": 85.9,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_verse1",
+              17.02
+            ],
+            [
+              "01_verse1",
+              21.7
+            ],
+            [
+              "02_verse1",
+              28.95
+            ],
+            [
+              "03_chorus",
+              34.94
+            ],
+            [
+              "04_chorus",
+              37.57
+            ],
+            [
+              "05_verse2",
+              49.12
+            ],
+            [
+              "06_verse2",
+              54.03
+            ],
+            [
+              "07_verse2",
+              60.55
+            ],
+            [
+              "08_chorus",
+              67.0
+            ],
+            [
+              "09_chorus",
+              69.75
+            ],
+            [
+              "10_verse3",
+              135.85
+            ],
+            [
+              "11_verse3",
+              140.75
+            ],
+            [
+              "12_verse3",
+              147.32
+            ],
+            [
+              "13_chorus",
+              153.73
+            ],
+            [
+              "14_chorus",
+              156.41
+            ],
+            [
+              "15_chorus",
+              167.55
+            ],
+            [
+              "16_chorus",
+              170.24
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Eric Clapton",
+      "song_id": "layla",
+      "slug": "eric_clapton_layla",
+      "n_boundaries": 20,
+      "song_duration": 423.8399963378906,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 20,
+      "reachable": 20,
+      "spurious": 0,
+      "fire_mae_ms": 400.00000000000284,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.19999999999998863,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 45.52852100459859,
+      "lat_e2e_p50_ms": 47.1,
+      "lat_e2e_p95_ms": 50.015,
+      "lat_e2e_max_ms": 53.1,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.19999999999998863,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 103.92000000000002,
+          "hmm_p90_s": 255.16000000000005,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 20,
+          "hits": 20,
+          "recall": 1.0,
+          "fire_mae_ms": 400.00000000000284,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 20,
+          "proc_mean_ms": 48.509851745576285,
+          "proc_p50_ms": 47.7,
+          "proc_p95_ms": 54.0,
+          "max_proc_ms": 86.2,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_intro",
+              19.9
+            ],
+            [
+              "01_verse1",
+              25.06
+            ],
+            [
+              "02_verse1",
+              32.98
+            ],
+            [
+              "03_chorus",
+              39.88
+            ],
+            [
+              "04_chorus",
+              45.69
+            ],
+            [
+              "05_verse2",
+              57.03
+            ],
+            [
+              "06_verse2",
+              65.38
+            ],
+            [
+              "07_chorus",
+              72.1
+            ],
+            [
+              "08_chorus",
+              79.27
+            ],
+            [
+              "09_verse3",
+              89.77
+            ],
+            [
+              "10_verse3",
+              97.69
+            ],
+            [
+              "11_chorus",
+              104.44
+            ],
+            [
+              "12_chorus",
+              110.23
+            ],
+            [
+              "13_chorus",
+              122.87
+            ],
+            [
+              "14_chorus",
+              127.67
+            ],
+            [
+              "15_chorus",
+              136.16
+            ],
+            [
+              "16_chorus",
+              147.7
+            ],
+            [
+              "17_chorus",
+              168.44
+            ],
+            [
+              "18_chorus",
+              178.75
+            ],
+            [
+              "19_outro",
+              185.2
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Eric Clapton",
+      "song_id": "Tears in Heaven",
+      "slug": "eric_clapton_tears_in_heaven",
+      "n_boundaries": 16,
+      "song_duration": 280.0,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 16,
+      "reachable": 16,
+      "spurious": 0,
+      "fire_mae_ms": 399.99999999999693,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.1999999999999993,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 45.30993750086054,
+      "lat_e2e_p50_ms": 46.8,
+      "lat_e2e_p95_ms": 49.3,
+      "lat_e2e_max_ms": 53.3,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.1999999999999993,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 3.94850000000001,
+          "hmm_p90_s": 12.996000000000006,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 16,
+          "hits": 16,
+          "recall": 1.0,
+          "fire_mae_ms": 399.99999999999693,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 16,
+          "proc_mean_ms": 47.303790087463554,
+          "proc_p50_ms": 47.1,
+          "proc_p95_ms": 50.0,
+          "max_proc_ms": 68.9,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_verse1",
+              13.0
+            ],
+            [
+              "01_verse1",
+              25.09
+            ],
+            [
+              "02_chorus",
+              37.56
+            ],
+            [
+              "03_chorus",
+              47.08
+            ],
+            [
+              "04_verse2",
+              67.5
+            ],
+            [
+              "05_verse2",
+              79.71
+            ],
+            [
+              "06_chorus",
+              92.25
+            ],
+            [
+              "07_chorus",
+              101.86
+            ],
+            [
+              "08_bridge",
+              122.52
+            ],
+            [
+              "09_bridge",
+              134.68
+            ],
+            [
+              "10_chorus",
+              171.36
+            ],
+            [
+              "11_chorus",
+              180.87
+            ],
+            [
+              "12_verse1",
+              201.43
+            ],
+            [
+              "13_verse1",
+              213.6
+            ],
+            [
+              "14_chorus",
+              226.12
+            ],
+            [
+              "15_chorus",
+              235.61
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Eric Clapton",
+      "song_id": "Wonderful Tonight",
+      "slug": "eric_clapton_wonderful_tonight",
+      "n_boundaries": 7,
+      "song_duration": 221.97332763671875,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 7,
+      "reachable": 7,
+      "spurious": 0,
+      "fire_mae_ms": 400.00000000000364,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.20000000000000284,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 45.47350003849715,
+      "lat_e2e_p50_ms": 47.0,
+      "lat_e2e_p95_ms": 49.7,
+      "lat_e2e_max_ms": 52.8,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000284,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 7.083999999999996,
+          "hmm_p90_s": 18.404999999999994,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 7,
+          "hits": 7,
+          "recall": 1.0,
+          "fire_mae_ms": 400.00000000000364,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 7,
+          "proc_mean_ms": 46.86625708884688,
+          "proc_p50_ms": 46.8,
+          "proc_p95_ms": 49.4,
+          "max_proc_ms": 53.3,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_verse1",
+              20.54
+            ],
+            [
+              "01_verse1",
+              40.99
+            ],
+            [
+              "02_verse2",
+              65.86
+            ],
+            [
+              "03_verse2",
+              86.3
+            ],
+            [
+              "04_bridge",
+              103.94
+            ],
+            [
+              "05_verse3",
+              146.71
+            ],
+            [
+              "06_verse3",
+              167.11
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Forrest Frank",
+      "song_id": "Misunderstood",
+      "slug": "forrest_frank_misunderstood",
+      "n_boundaries": 19,
+      "song_duration": 140.8000030517578,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 19,
+      "reachable": 19,
+      "spurious": 0,
+      "fire_mae_ms": 400.00000000000136,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.20000000000000284,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 45.764604525174946,
+      "lat_e2e_p50_ms": 47.1,
+      "lat_e2e_p95_ms": 50.0,
+      "lat_e2e_max_ms": 52.1,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000284,
+          "dtw_p90_s": 0.20000000000000284,
+          "hmm_med_s": 2.6544999999999987,
+          "hmm_p90_s": 16.34300000000001,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 19,
+          "hits": 19,
+          "recall": 1.0,
+          "fire_mae_ms": 400.00000000000136,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 19,
+          "proc_mean_ms": 46.79644970414201,
+          "proc_p50_ms": 46.650000000000006,
+          "proc_p95_ms": 49.4,
+          "max_proc_ms": 52.9,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_introforrestfrank",
+              19.52
+            ],
+            [
+              "01_verse1forrestfrank",
+              20.67
+            ],
+            [
+              "02_verse1forrestfrank",
+              23.82
+            ],
+            [
+              "03_verse1forrestfrank",
+              27.22
+            ],
+            [
+              "04_verse1forrestfrank",
+              30.46
+            ],
+            [
+              "05_chorusforrestfrank",
+              33.25
+            ],
+            [
+              "06_chorusforrestfrank",
+              41.16
+            ],
+            [
+              "07_verse2coryasburyforrestfrank",
+              47.88
+            ],
+            [
+              "08_verse2coryasburyforrestfrank",
+              51.21
+            ],
+            [
+              "09_verse2coryasburyforrestfrank",
+              54.29
+            ],
+            [
+              "10_verse2coryasburyforrestfrank",
+              58.4
+            ],
+            [
+              "11_chorusforrestfrank",
+              61.32
+            ],
+            [
+              "12_chorusforrestfrank",
+              76.82
+            ],
+            [
+              "13_verse3coryasburyforrestfrank",
+              86.67
+            ],
+            [
+              "14_verse3coryasburyforrestfrank",
+              92.58
+            ],
+            [
+              "15_choruscoryasburyforrestfrankforrestfrank",
+              96.56
+            ],
+            [
+              "16_choruscoryasburyforrestfrankforrestfrank",
+              103.02
+            ],
+            [
+              "17_choruscoryasburyforrestfrankforrestfrank",
+              106.95
+            ],
+            [
+              "18_outrocoryasburyforrestfrank",
+              114.32
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Forrest Frank",
+      "song_id": "Your Way's Better",
+      "slug": "forrest_frank_your_way_s_better",
+      "n_boundaries": 25,
+      "song_duration": 198.0778350830078,
+      "offsets": [
+        0.0
+      ],
+      "recall": NaN,
+      "hits": 0,
+      "reachable": 0,
+      "spurious": 0,
+      "fire_mae_ms": NaN,
+      "fire_max_ms": NaN,
+      "track_med_s": 0.20000000000000284,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 45.57297902647406,
+      "lat_e2e_p50_ms": 46.6,
+      "lat_e2e_p95_ms": 51.205000000000005,
+      "lat_e2e_max_ms": 55.3,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000284,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 46.56099999999999,
+          "hmm_p90_s": 83.76100000000001,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 0,
+          "hits": 0,
+          "recall": NaN,
+          "fire_mae_ms": NaN,
+          "fire_max_ms": NaN,
+          "spurious": 0,
+          "n_triggers": 1,
+          "proc_mean_ms": 47.41930010604454,
+          "proc_p50_ms": 46.9,
+          "proc_p95_ms": 52.28999999999999,
+          "max_proc_ms": 97.7,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "24_outroforrestfrankchoirchoirforrestfrank",
+              6.0
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Hillsong Young Free",
+      "song_id": "alive",
+      "slug": "hillsong_young_free_alive",
+      "n_boundaries": 23,
+      "song_duration": 264.4404602050781,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 23,
+      "reachable": 23,
+      "spurious": 0,
+      "fire_mae_ms": 400.00000000000006,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.20000000000000107,
+      "lock_on_s": 6.0,
+      "lat_embed_p50_ms": 45.48700002487749,
+      "lat_e2e_p50_ms": 47.2,
+      "lat_e2e_p95_ms": 49.805,
+      "lat_e2e_max_ms": 53.6,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000107,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 2.4819999999999993,
+          "hmm_p90_s": 13.314999999999998,
+          "track_pct": 1.0,
+          "lock_on_s": 6.0,
+          "reachable": 23,
+          "hits": 23,
+          "recall": 1.0,
+          "fire_mae_ms": 400.00000000000006,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 23,
+          "proc_mean_ms": 47.725096824167316,
+          "proc_p50_ms": 47.3,
+          "proc_p95_ms": 52.2,
+          "max_proc_ms": 63.2,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_verse1",
+              36.32
+            ],
+            [
+              "01_verse1",
+              43.55
+            ],
+            [
+              "02_verse1",
+              50.9
+            ],
+            [
+              "03_verse1",
+              57.99
+            ],
+            [
+              "04_prechorus1",
+              65.39
+            ],
+            [
+              "05_prechorus1",
+              73.21
+            ],
+            [
+              "06_chorus",
+              79.71
+            ],
+            [
+              "07_chorus",
+              87.0
+            ],
+            [
+              "08_verse2",
+              109.05
+            ],
+            [
+              "09_verse2",
+              116.31
+            ],
+            [
+              "10_verse2",
+              122.57
+            ],
+            [
+              "11_verse2",
+              130.85
+            ],
+            [
+              "12_prechorus1",
+              138.12
+            ],
+            [
+              "13_prechorus1",
+              145.96
+            ],
+            [
+              "14_chorus",
+              152.43
+            ],
+            [
+              "15_chorus",
+              159.68
+            ],
+            [
+              "16_prechorus2",
+              166.31
+            ],
+            [
+              "17_prechorus2",
+              196.32
+            ],
+            [
+              "18_prechorus2",
+              204.22
+            ],
+            [
+              "19_chorus",
+              210.64
+            ],
+            [
+              "20_chorus",
+              217.87
+            ],
+            [
+              "21_chorus",
+              225.18
+            ],
+            [
+              "22_chorus",
+              232.44
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Hillsong Young Free",
+      "song_id": "only-wanna-sing",
+      "slug": "hillsong_young_free_only_wanna_sing",
+      "n_boundaries": 15,
+      "song_duration": 208.04579162597656,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 15,
+      "reachable": 15,
+      "spurious": 0,
+      "fire_mae_ms": 400.00000000000057,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.20000000000000284,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 45.825770939700305,
+      "lat_e2e_p50_ms": 47.4,
+      "lat_e2e_p95_ms": 50.0,
+      "lat_e2e_max_ms": 56.0,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000284,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 3.25,
+          "hmm_p90_s": 8.764400000000009,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 15,
+          "hits": 15,
+          "recall": 1.0,
+          "fire_mae_ms": 400.00000000000057,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 15,
+          "proc_mean_ms": 47.0913567839196,
+          "proc_p50_ms": 47.0,
+          "proc_p95_ms": 49.8,
+          "max_proc_ms": 57.7,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_verse1",
+              12.97
+            ],
+            [
+              "01_verse1",
+              18.63
+            ],
+            [
+              "02_verse1",
+              31.04
+            ],
+            [
+              "03_chorus",
+              43.98
+            ],
+            [
+              "04_chorus",
+              56.43
+            ],
+            [
+              "05_chorus",
+              62.5
+            ],
+            [
+              "06_verse2",
+              87.75
+            ],
+            [
+              "07_verse2",
+              97.88
+            ],
+            [
+              "08_verse2",
+              103.76
+            ],
+            [
+              "09_chorus",
+              121.5
+            ],
+            [
+              "10_chorus",
+              131.65
+            ],
+            [
+              "11_chorus",
+              141.74
+            ],
+            [
+              "12_chorus",
+              154.26
+            ],
+            [
+              "13_chorus",
+              174.78
+            ],
+            [
+              "14_chorus",
+              179.5
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Hillsong Young Free",
+      "song_id": "real-love",
+      "slug": "hillsong_young_free_real_love",
+      "n_boundaries": 26,
+      "song_duration": 268.9219055175781,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 26,
+      "reachable": 26,
+      "spurious": 0,
+      "fire_mae_ms": 400.0000000000007,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.20000000000000107,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 59.308749507181346,
+      "lat_e2e_p50_ms": 64.2,
+      "lat_e2e_p95_ms": 67.0,
+      "lat_e2e_max_ms": 103.1,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000107,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 4.508499999999991,
+          "hmm_p90_s": 78.19700000000002,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 26,
+          "hits": 26,
+          "recall": 1.0,
+          "fire_mae_ms": 400.0000000000007,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 26,
+          "proc_mean_ms": 64.02697568389058,
+          "proc_p50_ms": 60.4,
+          "proc_p95_ms": 84.125,
+          "max_proc_ms": 210.0,
+          "rt_ok_pct": 0.9977203647416414,
+          "missed": [],
+          "triggered": [
+            [
+              "00_verse1",
+              52.78
+            ],
+            [
+              "01_verse1",
+              59.67
+            ],
+            [
+              "02_verse2",
+              66.54
+            ],
+            [
+              "03_verse2",
+              73.36
+            ],
+            [
+              "04_prechorus",
+              77.27
+            ],
+            [
+              "05_prechorus",
+              83.72
+            ],
+            [
+              "06_prechorus",
+              88.75
+            ],
+            [
+              "07_refrain",
+              96.53
+            ],
+            [
+              "08_refrain",
+              103.4
+            ],
+            [
+              "09_chorus",
+              120.32
+            ],
+            [
+              "10_chorus",
+              127.36
+            ],
+            [
+              "11_bridge",
+              134.3
+            ],
+            [
+              "12_bridge",
+              141.1
+            ],
+            [
+              "13_prechorus",
+              148.55
+            ],
+            [
+              "14_prechorus",
+              152.27
+            ],
+            [
+              "15_prechorus",
+              157.29
+            ],
+            [
+              "16_chorus",
+              161.44
+            ],
+            [
+              "17_chorus",
+              168.26
+            ],
+            [
+              "18_chorus",
+              188.87
+            ],
+            [
+              "19_chorus",
+              195.94
+            ],
+            [
+              "20_verse1",
+              210.48
+            ],
+            [
+              "21_verse1",
+              217.34
+            ],
+            [
+              "22_refrain",
+              226.84
+            ],
+            [
+              "23_refrain",
+              233.68
+            ],
+            [
+              "24_chorus",
+              250.68
+            ],
+            [
+              "25_chorus",
+              257.73
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Hillsong Young Free",
+      "song_id": "this-is-living",
+      "slug": "hillsong_young_free_this_is_living",
+      "n_boundaries": 22,
+      "song_duration": 209.4080352783203,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 22,
+      "reachable": 22,
+      "spurious": 0,
+      "fire_mae_ms": 399.99999999999636,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.20000000000000284,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 57.18549998709932,
+      "lat_e2e_p50_ms": 60.2,
+      "lat_e2e_p95_ms": 65.005,
+      "lat_e2e_max_ms": 77.2,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000284,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 2.149000000000001,
+          "hmm_p90_s": 6.999500000000001,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 22,
+          "hits": 22,
+          "recall": 1.0,
+          "fire_mae_ms": 399.99999999999636,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 22,
+          "proc_mean_ms": 59.29302554027505,
+          "proc_p50_ms": 58.9,
+          "proc_p95_ms": 64.015,
+          "max_proc_ms": 83.1,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_verse1aodhanking",
+              16.64
+            ],
+            [
+              "01_verse1aodhanking",
+              22.69
+            ],
+            [
+              "02_verse2aodhanking",
+              31.43
+            ],
+            [
+              "03_verse2aodhanking",
+              37.59
+            ],
+            [
+              "04_prechorusaodhanking",
+              46.15
+            ],
+            [
+              "05_prechorusaodhanking",
+              53.97
+            ],
+            [
+              "06_verse3aodhanking",
+              76.36
+            ],
+            [
+              "07_verse3aodhanking",
+              82.58
+            ],
+            [
+              "08_prechorusaodhanking",
+              91.14
+            ],
+            [
+              "09_prechorusaodhanking",
+              98.96
+            ],
+            [
+              "10_chorusaodhanking",
+              119.99
+            ],
+            [
+              "11_chorusaodhanking",
+              127.72
+            ],
+            [
+              "12_verse4lecrae",
+              136.61
+            ],
+            [
+              "13_verse4lecrae",
+              140.54
+            ],
+            [
+              "14_verse4lecrae",
+              144.29
+            ],
+            [
+              "15_verse4lecrae",
+              149.73
+            ],
+            [
+              "16_verse4lecrae",
+              154.8
+            ],
+            [
+              "17_verse4lecrae",
+              162.27
+            ],
+            [
+              "18_verse4lecrae",
+              165.79
+            ],
+            [
+              "19_refrainaodhanking",
+              173.3
+            ],
+            [
+              "20_chorusaodhanking",
+              187.49
+            ],
+            [
+              "21_chorusaodhanking",
+              195.23
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "Hillsong Young Free",
+      "song_id": "Wake",
+      "slug": "hillsong_young_free_wake",
+      "n_boundaries": 20,
+      "song_duration": 258.9605712890625,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 20,
+      "reachable": 20,
+      "spurious": 0,
+      "fire_mae_ms": 399.99999999999926,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.20000000000000195,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 57.58268799399957,
+      "lat_e2e_p50_ms": 60.1,
+      "lat_e2e_p95_ms": 65.705,
+      "lat_e2e_max_ms": 70.2,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000195,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 3.061,
+          "hmm_p90_s": 9.8675,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 20,
+          "hits": 20,
+          "recall": 1.0,
+          "fire_mae_ms": 399.99999999999926,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 20,
+          "proc_mean_ms": 59.730252764612956,
+          "proc_p50_ms": 59.0,
+          "proc_p95_ms": 67.3,
+          "max_proc_ms": 80.9,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_verse1",
+              14.68
+            ],
+            [
+              "01_verse1",
+              22.27
+            ],
+            [
+              "02_verse2",
+              29.48
+            ],
+            [
+              "03_verse2",
+              36.79
+            ],
+            [
+              "04_prechorus",
+              44.7
+            ],
+            [
+              "05_prechorus",
+              51.75
+            ],
+            [
+              "06_chorus",
+              73.33
+            ],
+            [
+              "07_chorus",
+              80.82
+            ],
+            [
+              "08_verse2",
+              102.62
+            ],
+            [
+              "09_verse2",
+              110.12
+            ],
+            [
+              "10_prechorus",
+              117.55
+            ],
+            [
+              "11_prechorus",
+              125.06
+            ],
+            [
+              "12_chorus",
+              146.65
+            ],
+            [
+              "13_chorus",
+              154.05
+            ],
+            [
+              "14_bridge",
+              176.59
+            ],
+            [
+              "15_bridge",
+              191.24
+            ],
+            [
+              "16_prechorus",
+              205.59
+            ],
+            [
+              "17_prechorus",
+              212.94
+            ],
+            [
+              "18_chorus",
+              218.78
+            ],
+            [
+              "19_chorus",
+              220.53
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "artist": "The Beatles",
+      "song_id": "let-it-be",
+      "slug": "the_beatles_let_it_be",
+      "n_boundaries": 26,
+      "song_duration": 228.71658325195312,
+      "offsets": [
+        0.0
+      ],
+      "recall": 1.0,
+      "hits": 26,
+      "reachable": 26,
+      "spurious": 0,
+      "fire_mae_ms": 400.0000000000017,
+      "fire_max_ms": 400.0000000000057,
+      "track_med_s": 0.20000000000000284,
+      "lock_on_s": 5.6,
+      "lat_embed_p50_ms": 57.804874959401786,
+      "lat_e2e_p50_ms": 61.0,
+      "lat_e2e_p95_ms": 67.905,
+      "lat_e2e_max_ms": 74.7,
+      "lat_rt_ok_pct": 1.0,
+      "per_offset": [
+        {
+          "offset": 0.0,
+          "duration": null,
+          "dtw_med_s": 0.20000000000000284,
+          "dtw_p90_s": 0.20000000000001705,
+          "hmm_med_s": 2.1189999999999998,
+          "hmm_p90_s": 14.045399999999995,
+          "track_pct": 1.0,
+          "lock_on_s": 5.6,
+          "reachable": 26,
+          "hits": 26,
+          "recall": 1.0,
+          "fire_mae_ms": 400.0000000000017,
+          "fire_max_ms": 400.0000000000057,
+          "spurious": 0,
+          "n_triggers": 26,
+          "proc_mean_ms": 59.97497757847534,
+          "proc_p50_ms": 59.2,
+          "proc_p95_ms": 66.72999999999999,
+          "max_proc_ms": 93.3,
+          "rt_ok_pct": 1.0,
+          "missed": [],
+          "triggered": [
+            [
+              "00_verse1",
+              12.54
+            ],
+            [
+              "01_verse1",
+              19.24
+            ],
+            [
+              "02_verse1",
+              25.47
+            ],
+            [
+              "03_verse1",
+              31.92
+            ],
+            [
+              "04_chorus",
+              37.56
+            ],
+            [
+              "05_chorus",
+              45.25
+            ],
+            [
+              "06_verse2",
+              51.48
+            ],
+            [
+              "07_verse2",
+              58.11
+            ],
+            [
+              "08_verse2",
+              64.47
+            ],
+            [
+              "09_verse2",
+              71.38
+            ],
+            [
+              "10_chorus",
+              77.29
+            ],
+            [
+              "11_chorus",
+              84.7
+            ],
+            [
+              "12_chorus",
+              90.94
+            ],
+            [
+              "13_chorus",
+              98.29
+            ],
+            [
+              "14_chorus",
+              145.62
+            ],
+            [
+              "15_chorus",
+              153.67
+            ],
+            [
+              "16_verse3",
+              160.58
+            ],
+            [
+              "17_verse3",
+              167.73
+            ],
+            [
+              "18_verse3",
+              174.54
+            ],
+            [
+              "19_verse3",
+              181.66
+            ],
+            [
+              "20_outro",
+              184.34
+            ],
+            [
+              "21_outro",
+              186.8
+            ],
+            [
+              "22_outro",
+              188.76
+            ],
+            [
+              "23_outro",
+              191.54
+            ],
+            [
+              "24_outro",
+              193.99
+            ],
+            [
+              "25_outro",
+              196.79
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

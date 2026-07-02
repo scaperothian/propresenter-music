@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -95,7 +96,8 @@ def run_offset(
     horizon = offset + warmup_sec
 
     bar = tqdm(source, total=total_chunks, unit="chunk", leave=False,
-               desc=f"offset {offset:g}s", dynamic_ncols=True)
+               desc=f"offset {offset:g}s", dynamic_ncols=True,
+               disable=not sys.stderr.isatty())
     for chunk, song_t in bar:
         if end_t is not None and song_t >= end_t:
             bar.close()
